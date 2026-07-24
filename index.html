@@ -1,0 +1,1206 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pimote — ドット絵をデスクトップに置いて、動かして、反応させる</title>
+<meta name="description" content="Pimote（ピモート）は、ドット絵をデスクトップに置いて、カーソルやクリックに反応させられる Windows アプリ。描く・取り込む・さがす・入手、すべて無料から。">
+<link rel="icon" href="assets/favicon.png">
+<meta name="description" content="描いた・取り込んだドット絵をデスクトップに置いて、カーソルやクリックに反応させられる無料のWindowsアプリ。プログラミング不要。">
+<!-- OGP＝XでURLを貼った時のカード。公開URLが確定したら og:url / og:image のドメインを合わせる -->
+<meta property="og:title" content="Pimote — ドット絵がデスクトップで動き出す">
+<meta property="og:description" content="ドット絵をデスクトップに置いて、カーソルやクリックに反応させられる無料のWindowsアプリ。プログラミング不要。">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://takeno-ko.github.io/pimote/">
+<meta property="og:image" content="https://takeno-ko.github.io/pimote/assets/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap" rel="stylesheet">
+<style>
+  /* アプリと同じUI統一フォント＝ベストテンCRT（FLOP DESIGN・M+ FONT LICENSE＝同梱/商用可）。
+     ascent/descent上書きもアプリと同値＝上下中央の載りが同じになる。 フォールバック＝DotGothic16（Google Fonts） */
+  @font-face{font-family:'BestTen CRT';src:url('assets/BestTen-CRT.sub.woff2') format('woff2');font-display:swap;ascent-override:84%;descent-override:16%;line-gap-override:0%;} /* サブセット73KB（静的全文字+かな全域+ASCII/全角記号）。未収録漢字（動的な作品名等）はDotGothic16へフォールバック */
+  :root{
+    --bg:#000; --panel:#0a0a0c; --ink:#f2f3f5; --ink2:#b7bcc4; --ink-dim:#8b8f98;
+    --line:#f2f3f5; --accent:#a2883b; --checker:rgba(113,118,123,.14);
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{background:var(--bg);color:var(--ink);font-family:'BestTen CRT','DotGothic16',sans-serif;line-height:1.9;}
+  img{image-rendering:pixelated;}
+  a{color:inherit;}
+  .wrap{max-width:790px;margin:0 auto;padding:0 20px;}
+
+  /* ===== M2 窓（白枠＋枠上ラベル） ===== */
+  .m2{position:relative;border:3px solid var(--line);border-radius:14px;background:var(--panel);padding:26px 26px 24px;}
+  .m2>.m2-label{position:absolute;top:-13px;left:14px;background:var(--bg);color:var(--line);padding:0 10px;font-size:14px;letter-spacing:.12em;line-height:1;}
+
+  /* ===== ヘッダー ===== */
+  /* 追従バー＝スクロール中もDLボタンに常に届く（CTA強化） */
+  .topbar{position:sticky;top:0;z-index:90;background:rgba(5,5,7,.94);}
+  header{max-width:790px;margin:0 auto;padding:0 20px;display:flex;align-items:center;gap:5px;height:58px;} /* gap5px＝ロゴ⇔ワードマークをアプリ実測(見た目8px)に一致 */
+  header .logo{width:32px;height:32px;display:block;}
+  header .wordmark{font-size:22px;letter-spacing:.06em;}
+  header .grow{flex:1;}
+  .dlbtn.small{padding:4px 10px;font-size:11px;gap:5px;margin-right:12px;border-width:4px;}
+  .dlbtn.small svg{width:12px;height:12px;}
+  .langsw{display:flex;border:1px solid var(--ink-dim);border-radius:8px;overflow:hidden;font-size:12px;}
+  .langsw button{background:transparent;border:none;color:var(--ink-dim);font-family:inherit;font-size:12px;padding:5px 12px;cursor:pointer;}
+  .langsw button+button{border-left:1px solid var(--ink-dim);}
+  .langsw button.on{background:var(--accent);color:#000;font-weight:700;}
+
+  /* ===== ヒーロー ===== */
+  .hero{text-align:center;padding:34px 0 72px;} /* 下余白72px＝帯の下余白と同値→次セクションまでの縦スペースが全区間136pxで統一 */
+  /* 大見出し＝大きく+疑似ボールド（text-shadowの1ドット横ずらし複写＝角を保ったまま太る。ワードマークの2px画と同じ理屈） */
+  .hero h1{word-break:keep-all;font-size:60px;font-weight:400;line-height:1.55;text-shadow:.04em 0 0 currentColor;letter-spacing:.02em;}
+  .hero h1 b{color:var(--accent);font-weight:400;}
+  .hero .sub{color:var(--ink2);margin-top:14px;}
+
+  /* 触れるデモ（デスクトップ風ステージ） */
+  /* ステージ＝コンテンツ幅の半分・右横にDLボタン（本人指定・巨大すぎ対策） */
+  .hero-row{display:flex;align-items:center;justify-content:center;gap:44px;margin-top:30px;}
+  .hero-row .stage-outer{flex:0 0 50%;min-width:0;}
+  .hero-row .dl{margin-top:0;}
+  /* 背景＝本物のWindowsデスクトップのスクショ（「デスクトップに置く」を文字通り見せる）。 床＝タスクバー上端 */
+  .stage{position:relative;aspect-ratio:1916/1196;border:3px solid var(--line);border-radius:14px;overflow:hidden;cursor:default;
+    background:url(assets/desktop.png) top left/cover no-repeat;} /* 本人提供の実デスクトップスクショ（2026-07-24差し替え・アイコン左上） */
+  .stage .floor{position:absolute;left:0;right:0;bottom:6.4%;height:0;}
+  .stage img.pim{position:absolute;width:144px;height:144px;transform:translate(-50%,-100%);user-select:none;-webkit-user-drag:none;cursor:grab;touch-action:none;}
+  .stage .hint{position:absolute;left:50%;top:14px;transform:translateX(-50%);font-size:12px;color:#e8e9ec;background:rgba(6,8,12,.72);border-radius:999px;padding:5px 16px;letter-spacing:.08em;white-space:nowrap;pointer-events:none;transition:opacity .5s;}
+  .stage .statebadge{position:absolute;right:12px;top:12px;font-size:11px;color:#000;background:var(--accent);border-radius:999px;padding:2px 10px;letter-spacing:.08em;pointer-events:none;}
+
+  /* ===== ダウンロードボタン ===== */
+  .dl{display:inline-flex;flex-direction:column;align-items:center;gap:8px;margin-top:26px;}
+  .dlbtn{display:inline-flex;align-items:center;gap:10px;background:var(--accent);color:#000;border:3px solid var(--accent);border-radius:12px;
+    padding:18px 46px;font-family:inherit;font-size:20px;letter-spacing:.06em;cursor:pointer;text-decoration:none;font-weight:700;}
+  .dlbtn:hover{background:#b89a45;border-color:#b89a45;}
+  .dlbtn svg{width:20px;height:20px;}
+  .dlnote{font-size:12px;color:var(--ink-dim);letter-spacing:.06em;}
+
+
+  /* ===== CREATE＝エディタのミニ再現（アプリのM2言語で・白市松＝アプリの既定キャンバス） ===== */
+  .ed-top{display:flex;align-items:center;gap:14px;font-size:12px;color:var(--ink2);margin-bottom:14px;}
+  .ed-doc{border:1px solid rgba(139,143,152,.5);border-radius:7px;padding:4px 12px;color:var(--ink);}
+  .ed-sw{display:flex;gap:6px;margin-left:auto;align-items:center;}
+  .ed-sw i{width:16px;height:16px;border:1px solid rgba(242,243,245,.5);display:block;border-radius:3px;}
+  .ed-sw i.b{background:#000;} .ed-sw i.w{background:#fff;}
+  .ed-body{display:flex;gap:14px;}
+  .ed-canvas{flex:1;min-height:260px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+    background:#fff;background-image:repeating-conic-gradient(#ebebeb 0 25%, transparent 0 50%);background-size:32px 32px;}
+  .ed-canvas img{height:72%;image-rendering:pixelated;}
+  .ed-tools{position:absolute;left:10px;top:50%;transform:translateY(-50%);width:44px;display:flex;flex-direction:column;gap:8px;z-index:5;pointer-events:none;}
+  .ed-tool{height:40px;border:1px solid rgba(139,143,152,.6);border-radius:8px;display:flex;align-items:center;justify-content:center;color:#e8e9ec;background:#0f0f14;}
+  .ed-tool svg{width:18px;height:18px;}
+  .ed-tool.on{background:var(--accent);color:#000;border-color:var(--accent);}
+  /* 取り込み分解＝コマ帯に統合：「Pim_〇〇.gif ▸▸▸ コマ…」＝状態切替のたびにコマが1枚ずつ展開（取り込んでる感・本人指摘） */
+  .gifchip{border:1px dashed rgba(139,143,152,.6);border-radius:8px;padding:7px 10px;font-size:11px;color:var(--ink);flex:none;}
+  .imp-arrow{color:var(--accent);font-size:13px;letter-spacing:.08em;flex:none;}
+  .imp-arrow i{font-style:normal;animation:march 1.1s infinite;}
+  .imp-arrow i:nth-child(2){animation-delay:.18s;}
+  .imp-arrow i:nth-child(3){animation-delay:.36s;}
+  @keyframes march{0%,100%{opacity:.25;}50%{opacity:1;}}
+  .sp-frames .fcell{animation:unpack .22s both;}
+  .sp-frames .fmore{animation:unpack .22s both;}
+  @keyframes unpack{from{opacity:0;transform:translateX(-16px) scale(.7);}to{opacity:1;transform:none;}}
+
+
+  /* ===== FAQ ===== */
+  .faq{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:12px;text-align:left;}
+  .faq details{border:2px solid rgba(139,143,152,.45);border-radius:10px;background:var(--panel);}
+  .faq summary{cursor:pointer;list-style:none;padding:14px 18px;font-size:14px;color:var(--ink);display:flex;gap:10px;align-items:baseline;}
+  .faq summary::-webkit-details-marker{display:none;}
+  .faq summary::before{content:"▸";color:var(--accent);flex:none;}
+  .faq details[open] summary::before{content:"▾";}
+  .faq details p{padding:0 18px 16px 41px;font-size:13px;color:var(--ink2);line-height:2;}
+
+  /* ===== セクション ===== */
+  section{padding:0;}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:26px;margin-top:8px;}
+  .m2 h3{font-size:17px;font-weight:400;color:var(--accent);margin-bottom:8px;letter-spacing:.06em;}
+  .m2 p{font-size:13px;color:var(--ink2);}
+  .m2 .shot{margin-top:14px;border:1px solid rgba(242,243,245,.25);border-radius:8px;width:100%;display:block;background:#050507;}
+  /* 区切り＝レトロの語彙（本人指定）：セクションごとの**面の色替え（ハードエッジ）**＋境界に8pxのドット帯
+     （FCウィンドウ縁の言語。 モダンなヘアライン/グラデ破線は使わない） */
+  .band{padding:64px 0 72px;}
+  .clicknote{color:var(--accent);}
+  .band.alt{position:relative;}
+
+  .band-in{max-width:790px;margin:0 auto;padding:0 20px;}
+  /* セクションオープナー＝MOTHER式（英語ピル＋大見出し＋両脇を歩くPimスプライト）＝これが区切り */
+  .sec-open{text-align:center;margin-bottom:34px;}
+  .pill-label{display:inline-flex;align-items:center;gap:8px;border:2px solid var(--accent);border-radius:999px;color:var(--accent);font-size:16px;letter-spacing:.3em;padding:8px 26px 8px 28px;line-height:1;text-shadow:1px 0 0 currentColor;} /* 疑似ボールド＝整数pxずらし（サブピクセルはWが潰れる） */
+  .pill-label svg{width:15px;height:15px;flex:none;image-rendering:pixelated;}
+  .h2row{display:flex;align-items:flex-end;justify-content:center;gap:22px;margin-top:16px;}
+  .h2row h2{word-break:keep-all;font-size:40px;font-weight:400;line-height:1.6;text-shadow:.04em 0 0 currentColor;}
+  .sec-open .sec-sub{color:var(--ink2);margin-top:14px;line-height:2;}
+  .br-sp{display:none;} /* モバイル専用改行（PCでは効かない） */
+  .hero .sub,.sec-open .sec-sub{font-size:16px;text-wrap:pretty;} /* 小文字＝全箇所同サイズ・prettyで孤立文字を防ぐ */
+  /* LIVEバッジ（共有＝リアルタイムの明示） */
+  .live{display:inline-flex;align-items:center;gap:7px;font-size:11px;color:var(--accent);letter-spacing:.12em;margin-left:12px;vertical-align:middle;}
+  .live .d{width:7px;height:7px;border-radius:50%;background:var(--accent);animation:liveblink 1.4s ease-in-out infinite;}
+  @keyframes liveblink{0%,100%{opacity:1;}50%{opacity:.25;}}
+
+  /* 状態パネル＝アプリの状態リスト＋プレビューのミニ再現 */
+  .statepanel{min-width:0;}
+  .sp-body{display:flex;gap:18px;}
+  .sp-list{flex:none;width:172px;display:flex;flex-direction:column;gap:3px;}
+  .sp-row{display:flex;align-items:center;gap:9px;padding:8px 12px;border-radius:8px;cursor:pointer;font-size:13px;color:var(--ink2);}
+  .sp-row .dotm{width:6px;height:6px;background:currentColor;flex:none;}
+  .sp-row:hover{background:rgba(113,118,123,.16);color:var(--ink);}
+  .sp-row.on{background:var(--accent);color:#000;font-weight:700;}
+  .sp-view{flex:1;min-width:0;border:1px solid rgba(242,243,245,.25);border-radius:10px;overflow:hidden;display:flex;flex-direction:column;}
+  /* コマ一覧（上）＝エディタのコマ列の比喩。 再生中のコマを金枠でハイライト */
+  .sp-frames{flex:none;display:flex;gap:7px;align-items:center;padding:11px 12px;border-bottom:1px solid rgba(242,243,245,.25);background:#0a0a0c;overflow:hidden;}
+  .sp-frames .fcell{position:relative;flex:none;width:44px;height:44px;border:1px dashed rgba(242,243,245,.35);border-radius:6px;padding:3px;
+    background:repeating-conic-gradient(#fff 0% 25%, #dbdbdb 0% 50%) 0 0/10px 10px;}
+  .sp-frames .fcell img{width:100%;height:100%;object-fit:contain;display:block;}
+  .sp-frames .fcell .no{position:absolute;right:2px;bottom:0;font-size:9px;color:#333;}
+  .sp-frames .fcell.on{border:2px solid var(--accent);padding:2px;}
+  .sp-frames .fmore{flex:none;font-size:11px;color:var(--ink-dim);padding:0 4px;}
+  /* プレビュー（下）＝白の市松（Pimのキャンバス背景と同じ） */
+  .sp-stage{flex:1;min-height:250px;position:relative;display:flex;align-items:center;justify-content:center;
+    background:repeating-conic-gradient(#fff 0% 25%, #dbdbdb 0% 50%) 0 0/18px 18px;}
+  .sp-stage img{width:160px;height:160px;}
+  .sp-cap{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);font-size:11px;color:#e8e9ec;background:rgba(6,8,12,.72);border-radius:999px;padding:4px 14px;white-space:nowrap;}
+
+  /* 共有フィード＝本物の公開作品（アプリの共有グリッドと**同じ見た目**：M2小窓枠[JSで注入]・180px固定カード） */
+  .feedgrid{display:grid;grid-template-columns:repeat(4,1fr);justify-content:start;gap:16px;} /* PC版＝4列固定（本人指定）。カード幅は自動＝約161px（アプリの180px固定から変更） */
+  .fcard{position:relative;border-radius:0;background:transparent;}
+  .fcard .fthumb{aspect-ratio:1;display:flex;align-items:center;justify-content:center;padding:0;position:relative;overflow:hidden;}
+  .fcard .fthumb img{width:74%;height:74%;object-fit:contain;} /* アプリの .thumb img と同値（74%箱にcontain）＝トリミング済みの中身がこの箱まで拡大。 max-width だと小画像が原寸のまま＝小さく見える実バグだった */
+  .fcard .fmeta{margin-top:7px;padding:0 2px;display:flex;align-items:flex-start;gap:8px;}
+  .fcard .fnames{flex:1;min-width:0;}
+  .fcard .fnm{font-size:13px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .fcard .fau{font-size:10px;color:var(--ink-dim);margin-top:6px;line-height:12px;display:flex;align-items:center;gap:4px;overflow:hidden;}
+  .fcard .fau .ava{width:16px;height:16px;flex:none;border:1px solid var(--ink-dim);border-radius:4px;display:inline-flex;align-items:center;justify-content:center;overflow:hidden;}
+  .fcard .fau .ava img{width:100%;height:100%;object-fit:cover;}
+  .fcard .fau .ava svg{width:11px;height:11px;}
+  .fcard .fau .aun{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .fcard .fright{display:flex;flex-direction:column;align-items:flex-end;gap:6px;align-self:flex-start;}
+  .fcard .flk{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--ink-dim);}
+  .fcard .fbadge{font-size:10px;padding:1px 6px;border-radius:3px;background:rgba(0,0,0,.55);color:#fff;border:1px solid rgba(255,255,255,.25);letter-spacing:.04em;}
+  .fcard .fbadge.paid{background:var(--accent);color:#000;border-color:var(--accent);}
+  .feed-empty{grid-column:1/-1;text-align:center;font-size:12px;color:var(--ink-dim);padding:30px 0;}
+
+  /* 詳細モーダル＝アプリの共有詳細（左=触れるデモ／右=情報）のミニ再現 */
+  .wmodal-bg{position:fixed;inset:0;z-index:1000;background:rgba(6,8,12,.7);display:flex;align-items:center;justify-content:center;padding:18px;}
+  .wmodal{position:relative;width:min(900px,96vw);height:min(560px,90vh);background:#000;display:flex;overflow:hidden;}
+  .wm-stage{flex:1;min-width:0;position:relative;overflow:hidden;cursor:default;}
+  .wm-stage img.wm-pet{position:absolute;transform:translate(-50%,-100%);user-select:none;-webkit-user-drag:none;cursor:grab;touch-action:none;}
+  .wm-side{flex:none;width:280px;padding:22px 22px 18px;display:flex;flex-direction:column;gap:14px;border-left:1px solid rgba(139,143,152,.35);}
+  .wm-close{position:absolute;top:10px;right:12px;width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px;color:var(--ink-dim);background:var(--panel);border:1px solid rgba(139,143,152,.5);border-radius:7px;transition:background .15s,color .15s;z-index:2;}
+  .wm-close:hover{background:#e81123;color:#fff;border-color:#e81123;}
+  .wm-title{font-size:19px;padding-right:30px;}
+  .wm-author{display:flex;align-items:center;gap:9px;font-size:12px;}
+  .wm-author .ava{width:32px;height:32px;border:1px solid rgba(139,143,152,.5);border-radius:5px;display:flex;align-items:center;justify-content:center;color:var(--ink-dim);overflow:hidden;flex:none;}
+  .wm-author .ava img{width:100%;height:100%;object-fit:cover;}
+  .wm-author .ava svg{width:18px;height:18px;}
+  .wm-author .hd{font-size:10px;color:var(--ink-dim);}
+  .wm-likes{font-size:12px;color:var(--ink-dim);}
+  .wm-reacts{display:flex;flex-wrap:wrap;gap:6px;}
+  .wm-reacts .pill{font-size:11px;border:1px solid rgba(139,143,152,.5);border-radius:3px;padding:2px 9px;color:var(--ink2);}
+  .wm-note{font-size:11px;color:var(--ink-dim);line-height:1.7;margin-top:auto;}
+  .wm-cta{display:block;text-align:center;background:var(--accent);color:#000;border-radius:9px;padding:10px;font-size:13px;font-weight:700;text-decoration:none;}
+  @media (max-width:640px){ .wmodal{flex-direction:column;height:min(640px,92vh);} .wm-side{width:100%;border-left:none;border-top:1px solid rgba(139,143,152,.35);} }
+
+  /* スクロールで出現（reduce-motion 環境では無効） */
+  .rev{opacity:0;transform:translateY(14px);transition:opacity .5s ease,transform .5s ease;}
+  .rev.in{opacity:1;transform:none;}
+  @media (prefers-reduced-motion: reduce){ .rev{opacity:1;transform:none;transition:none;} }
+
+  /* フッターで眠るPim */
+  .foot-pim{display:flex;justify-content:center;margin-bottom:10px;}
+  .foot-pim img{width:56px;height:56px;opacity:.9;}
+
+  /* ===== 料金 ===== */
+  .price-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:26px;margin-top:8px;}
+  .price-grid ul{list-style:none;font-size:13px;color:var(--ink2);}
+  .price-grid li{padding:5px 0;border-bottom:1px dashed rgba(139,143,152,.35);}
+  .price-grid li::before{content:"✦ ";color:var(--accent);}
+  .price-tag{font-size:26px;color:var(--ink);margin:4px 0 10px;}
+  .price-tag small{font-size:12px;color:var(--ink-dim);margin-left:8px;}
+  .pro-frame{border-color:var(--accent);}
+  .pro-frame>.m2-label{color:var(--accent);}
+
+  /* ===== フッター ===== */
+  footer{margin-top:60px;padding:26px 0 40px;border-top:1px solid rgba(139,143,152,.35);text-align:center;font-size:12px;color:var(--ink-dim);}
+  footer a{color:var(--ink-dim);text-decoration:none;margin:0 10px;}
+  footer a:hover{color:var(--ink);}
+  footer .cr{margin-top:12px;letter-spacing:.08em;}
+
+  /* 言語切替：既定=ja。html.en で英語を表示 */
+
+  /* ===== モバイル版（<960px）＝専用レイアウトへ一括切替（本人指定＝MOTHER方式。中間の連続縮小を持たない） ===== */
+  @media (max-width:789px){
+    .wrap,.band-in{max-width:640px;}
+    header{max-width:640px;}
+    .hero h1{font-size:32px;}
+    .h2row h2{font-size:24px;}
+    .hero .sub,.sec-open .sec-sub{font-size:15px;} /* 小文字＝全箇所同サイズ（モバイル版） */
+    .br-pc{display:none;} /* PC幅向けの手動改行はモバイルでは効かせない */
+    .br-sp{display:inline;}
+    .hero .sub,.sec-open .sec-sub{line-height:1.85;}
+    .hero-row{flex-direction:column;gap:20px;}
+    .hero-row .stage-outer{flex:none;width:100%;}
+    .sp-body{flex-direction:column;}
+    .sp-list{width:100%;flex-direction:row;flex-wrap:wrap;}
+    .sp-view{height:240px;}
+    .feedgrid{grid-template-columns:repeat(2,1fr);}
+    .dlbtn.small{font-size:10px;padding:3px 8px;margin-right:8px;}
+    .price-grid{grid-template-columns:1fr;}
+  }
+
+  .en-t{display:none;}
+  html.en .ja-t{display:none;}
+  html.en .en-t{display:inline;}
+  html.en .en-t.blk{display:block;}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <header>
+    <svg class="logo" viewBox="0 0 32 32" width="32" height="32" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg"><rect x="4" y="0" width="24" height="1" fill="#000000"/><rect x="4" y="1" width="24" height="1" fill="#000000"/><rect x="2" y="2" width="28" height="1" fill="#000000"/><rect x="2" y="3" width="28" height="1" fill="#000000"/><rect x="0" y="4" width="32" height="1" fill="#000000"/><rect x="0" y="5" width="32" height="1" fill="#000000"/><rect x="0" y="6" width="32" height="1" fill="#000000"/><rect x="0" y="7" width="32" height="1" fill="#000000"/><rect x="0" y="8" width="32" height="1" fill="#000000"/><rect x="0" y="9" width="32" height="1" fill="#000000"/><rect x="0" y="10" width="6" height="1" fill="#000000"/><rect x="6" y="10" width="6" height="1" fill="#ffffff"/><rect x="12" y="10" width="8" height="1" fill="#000000"/><rect x="20" y="10" width="6" height="1" fill="#ffffff"/><rect x="26" y="10" width="6" height="1" fill="#000000"/><rect x="0" y="11" width="4" height="1" fill="#000000"/><rect x="4" y="11" width="10" height="1" fill="#ffffff"/><rect x="14" y="11" width="4" height="1" fill="#000000"/><rect x="18" y="11" width="10" height="1" fill="#ffffff"/><rect x="28" y="11" width="4" height="1" fill="#000000"/><rect x="0" y="12" width="4" height="1" fill="#000000"/><rect x="4" y="12" width="10" height="1" fill="#ffffff"/><rect x="14" y="12" width="4" height="1" fill="#000000"/><rect x="18" y="12" width="10" height="1" fill="#ffffff"/><rect x="28" y="12" width="4" height="1" fill="#000000"/><rect x="0" y="13" width="3" height="1" fill="#000000"/><rect x="3" y="13" width="12" height="1" fill="#ffffff"/><rect x="15" y="13" width="2" height="1" fill="#000000"/><rect x="17" y="13" width="12" height="1" fill="#ffffff"/><rect x="29" y="13" width="3" height="1" fill="#000000"/><rect x="0" y="14" width="3" height="1" fill="#000000"/><rect x="3" y="14" width="12" height="1" fill="#ffffff"/><rect x="15" y="14" width="2" height="1" fill="#000000"/><rect x="17" y="14" width="12" height="1" fill="#ffffff"/><rect x="29" y="14" width="3" height="1" fill="#000000"/><rect x="0" y="15" width="32" height="1" fill="#000000"/><rect x="0" y="16" width="3" height="1" fill="#000000"/><rect x="3" y="16" width="6" height="1" fill="#ffffff"/><rect x="9" y="16" width="3" height="1" fill="#000000"/><rect x="12" y="16" width="3" height="1" fill="#ffffff"/><rect x="15" y="16" width="2" height="1" fill="#000000"/><rect x="17" y="16" width="6" height="1" fill="#ffffff"/><rect x="23" y="16" width="3" height="1" fill="#000000"/><rect x="26" y="16" width="3" height="1" fill="#ffffff"/><rect x="29" y="16" width="3" height="1" fill="#000000"/><rect x="0" y="17" width="3" height="1" fill="#000000"/><rect x="3" y="17" width="6" height="1" fill="#ffffff"/><rect x="9" y="17" width="3" height="1" fill="#000000"/><rect x="12" y="17" width="3" height="1" fill="#ffffff"/><rect x="15" y="17" width="2" height="1" fill="#000000"/><rect x="17" y="17" width="6" height="1" fill="#ffffff"/><rect x="23" y="17" width="3" height="1" fill="#000000"/><rect x="26" y="17" width="3" height="1" fill="#ffffff"/><rect x="29" y="17" width="3" height="1" fill="#000000"/><rect x="0" y="18" width="3" height="1" fill="#000000"/><rect x="3" y="18" width="6" height="1" fill="#ffffff"/><rect x="9" y="18" width="3" height="1" fill="#000000"/><rect x="12" y="18" width="3" height="1" fill="#ffffff"/><rect x="15" y="18" width="2" height="1" fill="#000000"/><rect x="17" y="18" width="6" height="1" fill="#ffffff"/><rect x="23" y="18" width="3" height="1" fill="#000000"/><rect x="26" y="18" width="3" height="1" fill="#ffffff"/><rect x="29" y="18" width="3" height="1" fill="#000000"/><rect x="0" y="19" width="4" height="1" fill="#000000"/><rect x="4" y="19" width="10" height="1" fill="#ffffff"/><rect x="14" y="19" width="4" height="1" fill="#000000"/><rect x="18" y="19" width="10" height="1" fill="#ffffff"/><rect x="28" y="19" width="4" height="1" fill="#000000"/><rect x="0" y="20" width="4" height="1" fill="#000000"/><rect x="4" y="20" width="10" height="1" fill="#ffffff"/><rect x="14" y="20" width="4" height="1" fill="#000000"/><rect x="18" y="20" width="10" height="1" fill="#ffffff"/><rect x="28" y="20" width="4" height="1" fill="#000000"/><rect x="0" y="21" width="6" height="1" fill="#000000"/><rect x="6" y="21" width="6" height="1" fill="#ffffff"/><rect x="12" y="21" width="3" height="1" fill="#000000"/><rect x="15" y="21" width="2" height="1" fill="#ffffff"/><rect x="17" y="21" width="3" height="1" fill="#000000"/><rect x="20" y="21" width="6" height="1" fill="#ffffff"/><rect x="26" y="21" width="6" height="1" fill="#000000"/><rect x="0" y="22" width="15" height="1" fill="#000000"/><rect x="15" y="22" width="2" height="1" fill="#ffffff"/><rect x="17" y="22" width="15" height="1" fill="#000000"/><rect x="0" y="23" width="32" height="1" fill="#000000"/><rect x="0" y="24" width="32" height="1" fill="#000000"/><rect x="0" y="25" width="32" height="1" fill="#000000"/><rect x="0" y="26" width="32" height="1" fill="#000000"/><rect x="0" y="27" width="32" height="1" fill="#000000"/><rect x="2" y="28" width="28" height="1" fill="#000000"/><rect x="2" y="29" width="28" height="1" fill="#000000"/><rect x="4" y="30" width="24" height="1" fill="#000000"/><rect x="4" y="31" width="24" height="1" fill="#000000"/></svg>
+    <svg class="wordmark" viewBox="0 0 91 20" width="91" height="20" fill="currentColor" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg"><rect x="4" y="0" width="8" height="2"/><rect x="2" y="2" width="12" height="2"/><rect x="0" y="4" width="6" height="2"/><rect x="10" y="4" width="6" height="2"/><rect x="0" y="6" width="4" height="2"/><rect x="12" y="6" width="4" height="2"/><rect x="0" y="8" width="4" height="2"/><rect x="12" y="8" width="4" height="2"/><rect x="0" y="10" width="6" height="2"/><rect x="10" y="10" width="6" height="2"/><rect x="0" y="12" width="14" height="2"/><rect x="0" y="14" width="4" height="2"/><rect x="6" y="14" width="6" height="2"/><rect x="0" y="16" width="4" height="2"/><rect x="0" y="18" width="4" height="2"/><rect x="17" y="0" width="4" height="2"/><rect x="17" y="2" width="4" height="2"/><rect x="17" y="6" width="4" height="2"/><rect x="17" y="8" width="4" height="2"/><rect x="17" y="10" width="4" height="2"/><rect x="17" y="12" width="4" height="2"/><rect x="17" y="14" width="4" height="2"/><rect x="17" y="16" width="6" height="2"/><rect x="19" y="18" width="4" height="2"/><rect x="28" y="4" width="6" height="2"/><rect x="38" y="4" width="6" height="2"/><rect x="26" y="6" width="20" height="2"/><rect x="24" y="8" width="6" height="2"/><rect x="32" y="8" width="8" height="2"/><rect x="42" y="8" width="6" height="2"/><rect x="24" y="10" width="4" height="2"/><rect x="34" y="10" width="4" height="2"/><rect x="44" y="10" width="4" height="2"/><rect x="24" y="12" width="4" height="2"/><rect x="34" y="12" width="4" height="2"/><rect x="44" y="12" width="4" height="2"/><rect x="24" y="14" width="4" height="2"/><rect x="34" y="14" width="4" height="2"/><rect x="44" y="14" width="4" height="2"/><rect x="24" y="16" width="4" height="2"/><rect x="34" y="16" width="4" height="2"/><rect x="44" y="16" width="4" height="2"/><rect x="24" y="18" width="4" height="2"/><rect x="34" y="18" width="4" height="2"/><rect x="44" y="18" width="4" height="2"/><rect x="53" y="4" width="8" height="2"/><rect x="51" y="6" width="12" height="2"/><rect x="49" y="8" width="6" height="2"/><rect x="59" y="8" width="6" height="2"/><rect x="49" y="10" width="4" height="2"/><rect x="61" y="10" width="4" height="2"/><rect x="49" y="12" width="4" height="2"/><rect x="61" y="12" width="4" height="2"/><rect x="49" y="14" width="6" height="2"/><rect x="59" y="14" width="6" height="2"/><rect x="51" y="16" width="12" height="2"/><rect x="53" y="18" width="8" height="2"/><rect x="66" y="0" width="4" height="2"/><rect x="66" y="2" width="4" height="2"/><rect x="66" y="4" width="8" height="2"/><rect x="66" y="6" width="8" height="2"/><rect x="66" y="8" width="4" height="2"/><rect x="66" y="10" width="4" height="2"/><rect x="66" y="12" width="4" height="2"/><rect x="66" y="14" width="4" height="2"/><rect x="66" y="16" width="8" height="2"/><rect x="68" y="18" width="6" height="2"/><rect x="79" y="4" width="8" height="2"/><rect x="77" y="6" width="12" height="2"/><rect x="75" y="8" width="6" height="2"/><rect x="83" y="8" width="6" height="2"/><rect x="75" y="10" width="4" height="2"/><rect x="81" y="10" width="6" height="2"/><rect x="75" y="12" width="10" height="2"/><rect x="87" y="12" width="4" height="2"/><rect x="75" y="14" width="8" height="2"/><rect x="85" y="14" width="6" height="2"/><rect x="77" y="16" width="12" height="2"/><rect x="79" y="18" width="8" height="2"/></svg>
+    <span class="grow"></span>
+    <a class="dlbtn small" id="dl-head" href="#">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M6 9l6 6 6-6M4 19h16"/></svg>
+      <span class="ja-t">無料でダウンロード</span><span class="en-t">Download free</span>
+    </a>
+    <span class="langsw"><button id="lang-ja" class="on">JP</button><button id="lang-en">EN</button></span>
+  </header>
+</div>
+
+<div id="zoomwrap">
+<div class="wrap">
+
+  <div class="hero">
+    <h1>
+      <span class="ja-t">あなたの<wbr>ドット絵が、<br>デスクトップで<wbr><b>動き出す。</b></span>
+      <span class="en-t">Your pixel art<br><b>comes alive</b> on your desktop.</span>
+    </h1>
+    <div class="sub">
+      <span class="ja-t">Pimote は、描いた・取り込んだドット絵をデスクトップに置いて、<br class="br-pc">カーソルやクリックに反応させられる Windows アプリ。<br class="br-sp">プログラミング不要。</span>
+      <span class="en-t">Pimote is a Windows app that turns any pixel art · drawn or imported ·<br class="br-pc">into a desktop buddy that reacts to your cursor and clicks.<br class="br-sp"> No code needed.</span>
+    </div>
+
+    <div class="hero-row">
+    <div class="stage-outer">
+      <div class="stage" id="stage">
+        <span class="statebadge" id="statebadge">idle</span>
+        <span class="hint" id="hint"><span class="ja-t">カーソルを近づけたり、クリックしてみてください</span><span class="en-t">Move your cursor close, or click Pim</span></span>
+        <div class="floor"></div>
+        <img class="pim" id="pim" alt="Pim" draggable="false">
+      </div>
+    </div>
+    <div class="dl">
+      <a class="dlbtn" id="dl-top" href="#" >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M6 9l6 6 6-6M4 19h16"/></svg>
+        <span class="ja-t">無料でダウンロード</span><span class="en-t">Download free</span>
+      </a>
+      <span class="dlnote"><span class="ja-t">Windows 10 / 11 ・ 無料（プロ版 ¥980 買い切り）</span><span class="en-t">Windows 10 / 11 · Free (Pro: one-time $6.49)</span></span>
+    </div>
+    </div><!-- /.hero-row -->
+  </div>
+</div><!-- /.wrap（ヒーローまで）＝帯セクションはbody直下＝100vw不要でスクロールバー幅ズレなし -->
+
+  <!-- 状態システム＝「状態にドット絵を当てはめる」を触って理解する（作る人にも、使うだけの人にも） -->
+  <section class="band alt rev">
+   <div class="band-in">
+    <div class="sec-open">
+      <span class="pill-label">HOW IT WORKS</span>
+      <div class="h2row">
+        <h2><span class="ja-t">ドット絵は<wbr>描いても、<wbr>取り込んでもいい<br>「状態」に<wbr>当てはめるだけで、<wbr>反応が<wbr>できあがる</span><span class="en-t">Draw or import your pixel art<br>Assign it to a "state" — the reaction is done</span></h2>
+      </div>
+      <div class="sec-sub">
+        <span class="ja-t">アプリ内のドットエディタで描けます。<br class="br-sp">手持ちのPNG/GIFの取り込みも。<br>「カーソル追従」「クリック」などの状態ごとにドット絵を用意すると、その通りに反応します。<br>全部作らなくても大丈夫＝用意した状態だけ反応します。<br class="br-sp"><span class="clicknote">状態名をクリックしてみてください。</span></span>
+        <span class="en-t">Draw in the built-in pixel editor,<br class="br-sp"> or import PNG / GIF.<br>Prepare art for states like "cursor" and "click", and it reacts that way.<br>You don't need all of them — only the states you make will react.<br class="br-sp"> <span class="clicknote">Click a state name.</span></span>
+      </div>
+    </div>
+    <div class="m2 statepanel">
+      <span class="m2-label"><span class="ja-t">状態</span><span class="en-t">STATES</span></span>
+      <div class="sp-body">
+        <div class="sp-list" id="sp-list"></div>
+        <div class="sp-view">
+          <div class="sp-frames" id="sp-frames"></div>
+          <div class="sp-stage">
+        <div class="ed-tools">
+          <span class="ed-tool on" title="pen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></span>
+          <span class="ed-tool" title="eraser"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/></svg></span>
+          <span class="ed-tool" title="fill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c3 4 6 7 6 10.5a6 6 0 0 1-12 0C6 10 9 7 12 3z"/></svg></span>
+          <span class="ed-tool" title="picker"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z"/></svg></span>
+        </div>
+            <img id="sp-img" alt="">
+            <div class="sp-cap" id="sp-cap"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+   </div>
+  </section>
+
+
+
+  <!-- 共有プラットフォーム＝本物のフィードをそのままリアルタイム表示 -->
+  <section class="band rev">
+   <div class="band-in">
+    <div class="sec-open">
+      <span class="pill-label">SHARE</span>
+      <div class="h2row">
+        <h2><span class="ja-t">みんなの作品を、<wbr>さがして、<wbr>置く</span><span class="en-t">Find works by everyone · and place them</span></h2>
+      </div>
+      <div class="sec-sub">
+        <span class="ja-t">これは飾りではなく、いま実際に公開されている作品。カードをクリックすると、このページ上でデモを触れます（デスクトップへの配置はアプリから）。</span>
+        <span class="en-t">Not a mockup: these are published right now. Click a card for a live demo right here in your browser (place them from the app).</span>
+      </div>
+    </div>
+    <div class="m2"><span class="m2-label"><span class="ja-t">共有プラットフォーム</span><span class="en-t">SHARE</span><span class="live" style="margin-left:10px;"><span class="d"></span>LIVE</span></span>
+      <div class="feedgrid" id="feedgrid">
+        <div class="feed-empty" id="feed-empty"><span class="ja-t">読み込み中…</span><span class="en-t">Loading…</span></div>
+      </div>
+    </div>
+   </div>
+  </section>
+
+  <section class="band alt rev">
+   <div class="band-in">
+    <div class="sec-open">
+      <span class="pill-label">PRICING</span>
+      <div class="h2row">
+        <h2><span class="ja-t">基本は無料。<wbr>プロ版は¥980、<wbr>買い切り。</span><span class="en-t">The basics are free.<wbr> Pro is a one-time $6.49.</span></h2>
+      </div>
+    </div>
+    <div class="price-grid">
+      <div class="m2"><span class="m2-label"><span class="ja-t">無料</span><span class="en-t">FREE</span></span>
+        <div class="price-tag">¥0</div>
+        <ul>
+          <li><span class="ja-t">1体をデスクトップに配置</span><span class="en-t">Place one pet on your desktop</span></li>
+          <li><span class="ja-t">全種類の反応（カーソル・クリック・タイピング…）</span><span class="en-t">Every reaction (cursor, click, typing…)</span></li>
+          <li><span class="ja-t">エディタ・アニメ・取り込み・書き出し 全部</span><span class="en-t">Full editor, animation, import & export</span></li>
+          <li><span class="ja-t">共有プラットフォーム（さがす・入手・公開）</span><span class="en-t">Share platform (browse, get, publish)</span></li>
+          <li><span class="ja-t">タイマー・アラーム</span><span class="en-t">Timers & alarms</span></li>
+        </ul>
+      </div>
+      <div class="m2 pro-frame"><span class="m2-label">PRO</span>
+        <div class="price-tag">¥980<small><span class="ja-t">買い切り・サブスクなし</span><span class="en-t">one-time · no subscription</span></small></div>
+        <ul>
+          <li><span class="ja-t">複数体を同時に配置</span><span class="en-t">Place multiple pets at once</span></li>
+          <li><span class="ja-t">仲間と絡む（追いかける・集合）</span><span class="en-t">Pets interact: follow & gather</span></li>
+          <li><span class="ja-t">状態ごとの複数アニメ出し分け</span><span class="en-t">Multiple animations per state</span></li>
+          <li><span class="ja-t">今後の小さなアップデートは無料</span><span class="en-t">Minor updates are free, forever</span></li>
+        </ul>
+      </div>
+    </div>
+   </div>
+  </section>
+
+
+  <!-- FAQ＝ダウンロード直前の不安つぶし（SmartScreenは先回りで正直に） -->
+  <section class="band alt rev">
+   <div class="band-in">
+    <div class="sec-open">
+      <span class="pill-label">FAQ</span>
+      <div class="h2row"><h2><span class="ja-t">よくある質問</span><span class="en-t">FAQ</span></h2></div>
+    </div>
+    <div class="faq">
+      <details>
+        <summary><span class="ja-t">インストール時に「WindowsによってPCが保護されました」と出ました</span><span class="en-t">Windows shows a "Windows protected your PC" warning</span></summary>
+        <p><span class="ja-t">出ることがあります。個人開発アプリで高額なコード署名証明書を使っていないためで、中身の問題ではありません。「詳細情報」→「実行」で起動できます。配布はこのページ（GitHub）からのみ行っています。</span><span class="en-t">This can happen. It's because this indie app doesn't use an expensive code-signing certificate — not because of the contents. Click "More info" → "Run anyway". The app is distributed only from this page (GitHub).</span></p>
+      </details>
+      <details>
+        <summary><span class="ja-t">無料でどこまで使えますか？</span><span class="en-t">How much is free?</span></summary>
+        <p><span class="ja-t">ほぼ全部です。描く・取り込む・書き出す・共有・タイマーまで無料。有料（¥980買い切り）は「複数体の同時配置」など複数体に関わる部分だけです。</span><span class="en-t">Almost everything: drawing, importing, exporting, sharing and timers are free. The one-time ¥980 Pro unlocks multi-pet features only.</span></p>
+      </details>
+      <details>
+        <summary><span class="ja-t">スマホやMacでも使えますか？</span><span class="en-t">Does it run on phones or Mac?</span></summary>
+        <p><span class="ja-t">いいえ、Windows 10 / 11 専用のデスクトップアプリです。スマホ版はありません。</span><span class="en-t">No — it's a desktop app for Windows 10 / 11 only. There is no mobile version.</span></p>
+      </details>
+      <details>
+        <summary><span class="ja-t">作品やデータはどこに保存されますか？</span><span class="en-t">Where is my data stored?</span></summary>
+        <p><span class="ja-t">すべて自分のPCの中（ローカル）です。共有プラットフォームに自分で公開した作品だけがサーバーに保存されます。</span><span class="en-t">Everything stays on your PC. Only works you choose to publish to the share platform are stored on the server.</span></p>
+      </details>
+      <details>
+        <summary><span class="ja-t">アンインストールはどうすれば？</span><span class="en-t">How do I uninstall?</span></summary>
+        <p><span class="ja-t">通常のWindowsアプリと同じく「設定 → アプリ」から削除できます。</span><span class="en-t">Just like any Windows app: Settings → Apps → Uninstall.</span></p>
+      </details>
+    </div>
+   </div>
+  </section>
+
+  <section class="band rev" style="text-align:center;">
+   <div class="band-in">
+    <div class="sec-open">
+      <span class="pill-label">DOWNLOAD</span>
+      <div class="h2row">
+        <h2><span class="ja-t">まずは、<wbr>1体置いてみて<wbr>ください</span><span class="en-t">Start with just one</span></h2>
+      </div>
+    </div>
+    <div class="dl" style="margin-top:0;">
+      <a class="dlbtn" id="dl-bottom" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M6 9l6 6 6-6M4 19h16"/></svg>
+        <span class="ja-t">無料でダウンロード</span><span class="en-t">Download free</span>
+      </a>
+      <span class="dlnote"><span class="ja-t">Windows 10 / 11 ・ インストーラ形式（.exe）</span><span class="en-t">Windows 10 / 11 · Installer (.exe)</span></span>
+    </div>
+   </div>
+  </section>
+
+<div class="wrap">
+  <footer>
+    <div class="foot-pim"><img id="foot-pim" alt=""></div>
+    <div>
+      <a href="https://earthy-mirror-141.notion.site/Pimote-Terms-of-Service-39ce74c26f95815691dcd3d91b207999" target="_blank" rel="noopener"><span class="ja-t">利用規約</span><span class="en-t">Terms</span></a>
+      <a href="https://earthy-mirror-141.notion.site/Pimote-Privacy-Policy-39ce74c26f9581c09c8cff271b5679bf" target="_blank" rel="noopener"><span class="ja-t">プライバシーポリシー</span><span class="en-t">Privacy</span></a>
+      <a href="mailto:pimote.support@gmail.com"><span class="ja-t">お問い合わせ</span><span class="en-t">Contact</span></a>
+    </div>
+    <div class="cr">© 2026 takenoko — Pimote <span id="v-check" style="opacity:.4;">rev.113</span></div>
+  </footer>
+</div>
+
+</div><!-- /#zoomwrap -->
+
+<script src="assets/pim-data.js"></script>
+<script>
+// ===== 設定 =====
+const DOWNLOAD_URL = ""; // ← リリース時に GitHub Releases のインストーラURLを入れる（空の間はボタンが「8月1日公開」表示）
+const LAUNCH_NOTE_JA = "8月1日 公開", LAUNCH_NOTE_EN = "Coming August 1";
+
+// ===== モバイル版＝390px基準の設計を丸ごと等倍拡大（<630px・本人指定） =====
+//   zoomで内側のレイアウト幅を常に390に固定＝改行・配置は幅で一切変わらず、見た目だけ拡大される。
+//   例外＝タイトルバー（zoomwrap外・等倍）／共有サムネイル（逆zoomで実寸維持）。
+//   モバイル版＝500px基準（最小ウィンドウで等倍・790未満はその拡大縮小のみ）
+//   PC版＝790px基準の等倍固定（790以上は余白が広がるだけ・本人が790幅の見た目を採用）
+const MOB_REF = 500;
+// 判定はCSSと同じメディアクエリに一本化する。clientWidth(<スクロールバー除く)との比較だと、
+// 790〜807px帯で「PC版CSS＋モバイルズーム」が二重適用される実バグ（スクロールバー幅の食い違い）
+const MQ_MOB_LAYOUT = matchMedia("(max-width:789px)");
+function applyMobZoom(){
+  const zw = document.getElementById("zoomwrap");
+  const z = MQ_MOB_LAYOUT.matches ? document.documentElement.clientWidth / MOB_REF : 0;
+  zw.style.zoom = z ? String(z) : "";
+  document.querySelectorAll(".feedgrid").forEach(el => { el.style.zoom = z ? String(1 / z) : ""; });
+  // DLボタン（タイトルバー以外）＝最小ウィンドウ時のサイズで固定（本人指定・拡大に追従させない）
+  document.querySelectorAll("#dl-top,#dl-bottom").forEach(el => { el.style.zoom = z ? String(1 / z) : ""; });
+}
+MQ_MOB_LAYOUT.addEventListener("change", applyMobZoom);
+window.addEventListener("resize", applyMobZoom);
+applyMobZoom();
+
+// ===== 言語切替 =====
+const setLang = (en) => {
+  document.documentElement.classList.toggle("en", en);
+  document.documentElement.lang = en ? "en" : "ja";
+  document.getElementById("lang-ja").classList.toggle("on", !en);
+  document.getElementById("lang-en").classList.toggle("on", en);
+  applyDl();
+  window.__pimBadge?.(); // デモの状態バッジも言語追従
+  window.__spLang?.();   // 状態パネルのリスト/説明も言語追従
+};
+document.getElementById("lang-ja").onclick = () => setLang(false);
+document.getElementById("lang-en").onclick = () => setLang(true);
+if (!/^ja/.test(navigator.language || "ja")) setLang(true);
+
+// ===== DLボタン（URL未設定の間は公開予告） =====
+function applyDl(){
+  const en = document.documentElement.classList.contains("en");
+  for (const id of ["dl-top","dl-bottom","dl-head"]) {
+    const a = document.getElementById(id);
+    if (DOWNLOAD_URL) { a.href = DOWNLOAD_URL; }
+    else {
+      a.href = "javascript:void(0)";
+      a.querySelectorAll("span").forEach(s=>s.remove());
+      const sp = document.createElement("span");
+      sp.textContent = en ? LAUNCH_NOTE_EN : LAUNCH_NOTE_JA;
+      a.appendChild(sp);
+    }
+  }
+}
+applyDl();
+
+// ===== 触れるデモ（Pim）＝アプリの詳細デモのミニ版 =====
+(() => {
+  const stage = document.getElementById("stage");
+  const img = document.getElementById("pim");
+  const badge = document.getElementById("statebadge");
+  const hint = document.getElementById("hint");
+  const S = window.PIM.states, F = window.PIM.fps;
+  // 位置＝足元（アンカー）基準：px=横（0..1）／pyF=縦（足元のステージ高さ比）。 実機と同じく**どこにでも置ける**（ドラッグ）。
+  let px = 0.5;
+  // 床＝タスクバー上端＋余裕。 背景は cover なので、床の高さは「元画像の下から77px」を表示倍率で換算して求める
+  //   （固定比率だとステージの高さを変えるたびに床がタスクバーからズレる）
+  const BG_W = 1916, BG_H = 1196, FLOOR_SRC_PX = 84; // タスクバー高さ実測70px＋余裕14px＝どの縮尺でも足がタスクバーに重ならない（丸め誤差込み・本人指定）
+  const floorRatio = () => {
+    const r = stage.getBoundingClientRect();
+    if (!r.height) return 0.12;
+    const cov = Math.max(r.width / BG_W, r.height / BG_H);
+    return Math.min(0.3, (FLOOR_SRC_PX * cov) / r.height);
+  };
+  let pyF = 1 - floorRatio();
+  let cur = "", idx = 0, once = false, timer = 0; // cur初期値は空＝初回 play("idle") が同一キー扱いでスキップされない（初期表示が壊れ画像になる実バグ）
+  let walking = false, walkRaf = 0, walkTimer = 0, sleepTimer = 0, hintHidden = false;
+
+  // ★大きさ＝**実体(bbox)基準**（実機の「大きさpx」と同じ意味論・v2.387）。 キャンバス(100×100)を144pxにすると
+  //   Pimの実体(48×48)は69px相当＝実機の半分以下に見える実バグだった。 idleコマの共通bboxを測り、
+  //   「実体高さ=144px」になるようキャンバス表示倍率を決め、 足元・中心も実体基準で置く。
+  // 実体の表示高さ＝ステージ幅に比例（背景のデスクトップと同じ縮尺で縮む。固定60pxだと小窓で絵だけ巨大＝本人指摘）
+  //   基準＝ステージ幅450pxのとき60px。下限24px（潰れ防止）・上限60px（従来値）
+  const MQ_MOBILE = matchMedia("(max-width:789px)"); // レイアウト切替と同じ境界（2モード設計）
+  const dispH = () => {
+    if (!MQ_MOBILE.matches) return 60;               // PC版＝固定（本人調整値）
+    const w = stage.clientWidth || 450;
+    return Math.max(24, Math.min(48, Math.round(w * 0.08))); // モバイル版＝小さめ・幅に比例
+  };
+  let bb = null; // {cw,ch,l,t,r,b}（キャンバス寸法と実体bbox）
+  (function measure(){
+    const urls = S.idle || [];
+    let done = 0, minX = 1e9, minY = 1e9, maxX = -1, maxY = -1, cw = 0, ch = 0;
+    urls.forEach(u => { const im = new Image(); im.onload = () => {
+      cw = im.width; ch = im.height;
+      const c = document.createElement("canvas"); c.width = cw; c.height = ch;
+      const cx = c.getContext("2d", { willReadFrequently: true }); cx.drawImage(im, 0, 0);
+      const d = cx.getImageData(0, 0, cw, ch).data;
+      for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++)
+        if (d[(y*cw+x)*4+3] > 8) { if(x<minX)minX=x; if(y<minY)minY=y; if(x>maxX)maxX=x; if(y>maxY)maxY=y; }
+      if (++done === urls.length && maxX >= 0) { bb = { cw, ch, l:minX, t:minY, r:maxX, b:maxY }; applySize(); layout(); }
+    }; im.src = u; });
+  })();
+  // 「形を優先」＝実機と同じ整数倍スナップ（物理px基準）。 中途半端な倍率だとドットの太さが不揃いに崩れる
+  const snapScale = (targetPx, bboxH) => { const d = window.devicePixelRatio || 1; return Math.max(1, Math.round(targetPx * d / bboxH)) / d; };
+  function heroScale(){ return bb ? snapScale(dispH(), bb.b - bb.t + 1) : 1; }
+  function applySize(){
+    if (!bb) return;
+    const scale = heroScale(); // 整数倍スナップ＝ドットが崩れない（実機の「形を優先」）
+    img.style.width = (bb.cw * scale) + "px";
+    img.style.height = (bb.ch * scale) + "px";
+  }
+  function layout(){
+    // 寸法＝design空間（clientWidth/Height）で取る。getBoundingClientRectはモバイル等倍拡大(zoom)後の実寸
+    // なので、style.left(design px)に入れると倍率ぶん二重にずれてPimが枠外に出る実バグ
+    const w = stage.clientWidth, h = stage.clientHeight;
+    let ox = 0, oy = 0;
+    if (bb) { // 足元・中心＝実体基準（キャンバスの余白に影響されない＝実機と同じ）
+      const scale = heroScale();
+      ox = (bb.cw/2 - (bb.l + bb.r + 1)/2) * scale; // キャンバス中心と実体中心のズレ
+      oy = (bb.ch - (bb.b + 1)) * scale;            // キャンバス下端と実体下端のズレ
+    }
+    img.style.left = (px * w + ox) + "px";
+    img.style.top = (pyF * h + oy) + "px";
+  }
+  // 状態バッジ＝アプリの反応ラベルと同じ言い方（日英・言語切替に追従）
+  const BADGE = {
+    idle:["通常","idle"], cursor:["カーソル追従","cursor"], click:["クリック","click"], pat:["なで","pat"],
+    scroll:["スクロール反応","scroll"], typing:["タイピング反応","typing"], walk:["歩く","walk"],
+    sleep:["寝る","sleep"], drag:["ドラッグ中","drag"],
+  };
+  function renderBadge(){
+    const base = cur.replace(/^cursor.*/,"cursor").replace(/^walk.*/,"walk");
+    const en = document.documentElement.classList.contains("en");
+    badge.textContent = (BADGE[base] || BADGE.idle)[en ? 1 : 0];
+  }
+  window.__pimBadge = renderBadge; // 言語切替から呼ぶ
+  function play(key, one=false){
+    if (!S[key] || !S[key].length) key = "idle";
+    if (!one && cur === key) return;
+    cur = key; once = one; idx = 0;
+    renderBadge();
+    clearInterval(timer);
+    const fps = Math.max(1, Math.min(120, F[key] || 12));
+    img.src = S[key][0];
+    timer = setInterval(() => {
+      idx++;
+      if (once && idx >= S[cur].length) { once = false; play("idle"); return; }
+      idx %= S[cur].length;
+      img.src = S[cur][idx];
+    }, 1000 / fps);
+  }
+  function wake(){ if (cur === "sleep") play("idle"); resetSleep(); hideHint(); }
+  function resetSleep(){ clearTimeout(sleepTimer); sleepTimer = setTimeout(() => { if (cur === "idle") play("sleep"); }, 30000); }
+  function hideHint(){ if (!hintHidden) { hintHidden = true; hint.style.opacity = "0"; } }
+
+  // 「絵の上」＝**不透明ピクセルの上**（実機のピクセル hit-test と同じ）。 透明な余白は掴めない/クリックできない。
+  const pxCache = new Map(); // url -> {ctx,w,h}
+  function pxInfoOf(url){
+    let inf = pxCache.get(url);
+    if (inf) return inf;
+    const im = new Image();
+    im.src = url; // dataURL＝同期デコードできないので、初回はロード後にキャッシュ（次のイベントから効く）
+    if (!im.complete) { im.onload = () => pxInfoOf(url); pxCache.set(url, null); return null; }
+    const c = document.createElement("canvas"); c.width = im.width; c.height = im.height;
+    const cx = c.getContext("2d", { willReadFrequently: true });
+    cx.drawImage(im, 0, 0);
+    inf = { ctx: cx, w: im.width, h: im.height };
+    pxCache.set(url, inf);
+    return inf;
+  }
+  function onOpaquePx(e){
+    const ir = img.getBoundingClientRect();
+    if (!(e.clientX >= ir.left && e.clientX <= ir.right && e.clientY >= ir.top && e.clientY <= ir.bottom) || ir.width === 0) return false;
+    const inf = pxInfoOf(img.src);
+    if (!inf) return true; // 未計測の一瞬だけ矩形扱い（すぐ計測が追いつく）
+    const lx = Math.floor(((e.clientX - ir.left) / ir.width) * inf.w);
+    const ly = Math.floor(((e.clientY - ir.top) / ir.height) * inf.h);
+    if (lx < 0 || ly < 0 || lx >= inf.w || ly >= inf.h) return false;
+    try { return inf.ctx.getImageData(lx, ly, 1, 1).data[3] > 8; } catch { return true; }
+  }
+
+  // ドラッグ＝実機と同じ「掴んで動かして、離した場所に留まる」（4px閾値でクリックと区別）
+  let grab = null; // {ox,oy,sx,sy,moved}
+  img.addEventListener("pointerdown", (e) => {
+    if (!onOpaquePx(e)) return; // 透明な余白＝反応しない（実機と同じ）
+    e.preventDefault(); wake(); cancelWalkQuiet();
+    const r = stage.getBoundingClientRect();
+    grab = { ox: (px * r.width) - (e.clientX - r.left), oy: (pyF * r.height) - (e.clientY - r.top), sx: e.clientX, sy: e.clientY, moved: false };
+    try { img.setPointerCapture(e.pointerId); } catch {}
+  });
+  img.addEventListener("pointermove", (e) => {
+    if (!grab) return;
+    if (!grab.moved && Math.hypot(e.clientX - grab.sx, e.clientY - grab.sy) > 4) {
+      grab.moved = true;
+      img.style.cursor = "grabbing";
+      if (S.drag) play("drag");
+    }
+    if (!grab.moved) return;
+    const r = stage.getBoundingClientRect();
+    const minY = Math.min(0.9, dispH() / stage.clientHeight + 0.02); // design空間同士で比較（r.heightはzoom後の実寸） // 足元は**実体高さ**ぶんより下（キャンバス高だと拡大時に上限と逆転して床に張り付く実バグ）
+    px = Math.max(0.05, Math.min(0.95, (e.clientX - r.left + grab.ox) / r.width));
+    pyF = Math.max(minY, Math.min(1 - floorRatio(), (e.clientY - r.top + grab.oy) / r.height));
+    layout();
+  });
+  const endGrab = (e) => {
+    if (!grab) return;
+    const wasDrag = grab.moved;
+    grab = null;
+    img.style.cursor = "pointer";
+    if (!wasDrag) play("click", true);   // 動かさず離した＝クリック反応
+    else { once = false; play("idle"); } // ドラッグ終了＝置いた場所で待機（実機と同じ）
+    scheduleWalk();
+  };
+  img.addEventListener("pointerup", endGrab);
+  img.addEventListener("pointercancel", endGrab);
+
+  // カーソル追従（8方向・ステージ内）＋なで（左右3往復）
+  let hoverT = 0, patLastX = 0, patSign = 0, patRev = 0, patWin = 0, patT = 0, patOn = false;
+  stage.addEventListener("pointermove", (e) => {
+    wake();
+    if (once || walking || grab) return;
+    const r = stage.getBoundingClientRect();
+    const ir = img.getBoundingClientRect();
+    const overPet = onOpaquePx(e); // 不透明ピクセルの上だけ「絵の上」（なで判定・カーソル表示とも実機と同じ）
+    img.style.cursor = overPet ? "grab" : "default";
+    if (overPet && S.pat) {
+      const dx = e.clientX - patLastX; patLastX = e.clientX;
+      if (Math.abs(dx) > 1) {
+        const sign = dx > 0 ? 1 : -1;
+        if (patOn) { clearTimeout(patT); patT = setTimeout(()=>{ patOn=false; if(!once) play("idle"); }, 550); }
+        else if (patSign !== 0 && sign !== patSign) {
+          const now = performance.now();
+          if (patRev === 0 || now - patWin > 1100) { patRev = 1; patWin = now; } else patRev++;
+          if (patRev >= 3) { patOn = true; patRev = 0; play("pat"); patT = setTimeout(()=>{ patOn=false; if(!once) play("idle"); }, 550); }
+        }
+        patSign = sign;
+      }
+      if (patOn) return;
+    }
+    // ペット中心→カーソルの8方向（スクロール反応中は奪わない）
+    if (scrollHold) return;
+    const cx = ir.left + ir.width/2, cy = ir.top + ir.height/2;
+    const dx = e.clientX - cx, dy = e.clientY - cy;
+    const oct = Math.round(Math.atan2(dy, dx) / (Math.PI/4)) & 7;
+    const key = ["cursorE","cursorSE","cursorS","cursorSW","cursorW","cursorNW","cursorN","cursorNE"][oct];
+    if (!patOn) play(S[key] ? key : "cursor");
+    clearTimeout(hoverT);
+    hoverT = setTimeout(() => { if (!once && !patOn && !walking && !grab) play("idle"); }, 600); // grab中は戻さない＝ドラッグアニメを潰さない
+  });
+  stage.addEventListener("pointerleave", () => { if (!once && !walking && !grab) play("idle"); });
+
+  // スクロール＝ホイール反応（回している間＋余韻はスクロール優先＝カーソル追従と取り合ってチカつかない）
+  let wheelT = 0, scrollHold = false;
+  stage.addEventListener("wheel", (e) => {
+    if (!S.scroll) return;
+    e.preventDefault(); wake(); if (walking) cancelWalk();
+    scrollHold = true;
+    if (!once) play("scroll");
+    clearTimeout(wheelT); wheelT = setTimeout(() => { scrollHold = false; if (!once && !grab && cur === "scroll") play("idle"); }, 450);
+  }, { passive:false });
+  // タイピング＝キー入力（入力欄以外）
+  let typeT = 0;
+  window.addEventListener("keydown", (e) => {
+    const t = e.target; if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
+    if (!S.typing) return;
+    wake(); if (walking) cancelWalk();
+    if (!once) play("typing");
+    clearTimeout(typeT); typeT = setTimeout(() => { if (!once && !grab && cur === "typing") play("idle"); }, 700);
+  });
+
+  // 散歩（待機中にときどき左右へ・今いる高さのまま）
+  function cancelWalkQuiet(){ walking = false; cancelAnimationFrame(walkRaf); clearTimeout(walkTimer); }
+  function cancelWalk(){ cancelWalkQuiet(); scheduleWalk(); }
+  function scheduleWalk(){ clearTimeout(walkTimer); walkTimer = setTimeout(startWalk, 6000 + Math.random()*6000); }
+  function startWalk(){
+    if (once || grab || cur !== "idle") { scheduleWalk(); return; }
+    const tx = 0.12 + Math.random() * 0.76;
+    if (Math.abs(tx - px) < 0.06) { scheduleWalk(); return; }
+    walking = true;
+    play(tx > px ? (S.walkE ? "walkE" : "walk") : (S.walkW ? "walkW" : "walk"));
+    let last = performance.now();
+    const step = (now) => {
+      if (!walking) return;
+      const r = stage.getBoundingClientRect();
+      const dt = (now - last) / 1000; last = now;
+      const dir = Math.sign(tx - px);
+      px += dir * (55 * dt) / r.width;
+      if ((dir > 0 && px >= tx) || (dir < 0 && px <= tx)) { px = tx; layout(); walking = false; play("idle"); scheduleWalk(); return; }
+      layout();
+      walkRaf = requestAnimationFrame(step);
+    };
+    walkRaf = requestAnimationFrame(step);
+  }
+
+  window.addEventListener("resize", () => { applySize(); layout(); });
+  layout();
+  play("idle");
+  resetSleep();
+  scheduleWalk();
+})();
+
+// ===== 状態パネル＝状態を選ぶと、その状態のドット絵が再生される（作り方と反応の種類を同時に伝える） =====
+(() => {
+  const S = window.PIM.states, F = window.PIM.fps;
+  // 表示する状態（アプリの STATE_DEFS と同じ言い方・順）。 anim=再生するコマ列の作り方
+  const DEFS = [
+    { key:"idle",   ja:["通常","いつもの姿。何もしていない時"],            en:["Idle","The usual look, when nothing happens"],       frames:()=>S.idle,      fps:()=>F.idle },
+    { key:"cursor", ja:["カーソル追従","カーソルの方を向く（8方向）"],      en:["Cursor","Looks toward your cursor (8 directions)"],  frames:()=>["cursorW","cursorNW","cursorN","cursorNE","cursorE","cursorSE","cursorS","cursorSW"].map(k=>S[k]?.[0]).filter(Boolean), fps:()=>3 },
+    { key:"click",  ja:["クリック","クリックされた時の一回再生"],           en:["Click","Plays once when clicked"],                   frames:()=>S.click,     fps:()=>F.click },
+    { key:"pat",    ja:["なで","なでられた時"],                            en:["Pat","When you rub it gently"],                      frames:()=>S.pat,       fps:()=>F.pat },
+    { key:"typing", ja:["タイピング中","キーボードを打っている間"],         en:["Typing","While you're typing"],                      frames:()=>S.typing,    fps:()=>F.typing },
+    { key:"scroll", ja:["スクロール中","ホイールを回している間"],           en:["Scroll","While you're scrolling"],                   frames:()=>S.scroll,    fps:()=>F.scroll },
+    { key:"walk",   ja:["歩く・移動","決めた範囲を自律的に歩く"],           en:["Walk","Wanders the range you set"],                  frames:()=>S.walkE||S.walk, fps:()=>F.walk },
+    { key:"sleep",  ja:["長時間放置","しばらく操作がなかった時"],           en:["Sleep","After a while with no activity"],            frames:()=>S.sleep,     fps:()=>2 },
+    { key:"drag",   ja:["ドラッグ中","つままれて動かされている間"],         en:["Drag","While being carried around"],                 frames:()=>S.drag,      fps:()=>F.drag },
+  ];
+  const list = document.getElementById("sp-list");
+  const img = document.getElementById("sp-img");
+  const cap = document.getElementById("sp-cap");
+  let cur = 0, timer = 0, auto = 0, userTouched = false;
+  const isEn = () => document.documentElement.classList.contains("en");
+  function renderList(){
+    list.innerHTML = DEFS.map((d,i)=>`<div class="sp-row${i===cur?" on":""}" data-i="${i}"><span class="dotm"></span>${isEn()?d.en[0]:d.ja[0]}</div>`).join("");
+    list.querySelectorAll(".sp-row").forEach(r=>r.addEventListener("click",()=>{ userTouched = true; clearInterval(auto); select(Number(r.dataset.i)); }));
+  }
+  const framesBox = document.getElementById("sp-frames");
+  function select(i){
+    cur = i;
+    list.querySelectorAll(".sp-row").forEach((r,j)=>r.classList.toggle("on", j===cur));
+    const d = DEFS[cur];
+    cap.textContent = isEn() ? d.en[1] : d.ja[1];
+    const frames = d.frames() || S.idle;
+    const fps = Math.max(1, Math.min(120, d.fps() || 12));
+    // コマ一覧（上）＝**入る分だけ**表示＋残数（+n）。 スクロールバー・見切れは出さない（本人指定）
+    const cellW = 44 + 7, pad = 24, moreW = 46, chipW = 150; // セル幅+gap／左右padding／+n／gifチップ+矢印
+    const SHOW = Math.max(1, Math.floor((framesBox.clientWidth - pad - moreW - chipW) / cellW) || 6);
+    // 「Pim_〇〇.gif ▸▸▸ コマ…」＝取り込み分解の図解をコマ帯に統合。コマは1枚ずつ展開（unpack）
+    framesBox.innerHTML = `<span class="gifchip">Pim_${d.key}.gif</span><span class="imp-arrow"><i>▸</i><i>▸</i><i>▸</i></span>`
+      + frames.slice(0, SHOW).map((u,j)=>`<span class="fcell${j===0?" on":""}" style="animation-delay:${j*70}ms"><img src="${u}"><span class="no">${j+1}</span></span>`).join("")
+      + (frames.length > SHOW ? `<span class="fmore" style="animation-delay:${SHOW*70}ms">+${frames.length - SHOW}</span>` : "");
+    const cells = framesBox.querySelectorAll(".fcell");
+    clearInterval(timer); let idx = 0;
+    img.src = frames[0];
+    if (frames.length > 1) timer = setInterval(()=>{
+      idx=(idx+1)%frames.length; img.src=frames[idx];
+      cells.forEach((c,j)=>c.classList.toggle("on", j === (idx < SHOW ? idx : -1)));
+    }, 1000/fps);
+  }
+  renderList(); select(0);
+  // 触られるまでは自動で順番に見せる（3秒ごと）＝眺めるだけでも全状態が伝わる
+  auto = setInterval(()=>{ if (!userTouched) select((cur+1)%DEFS.length); }, 3000);
+  window.__spLang = () => { renderList(); select(cur); }; // 言語切替に追従
+})();
+
+// ===== M2 小窓枠＝アプリと同一の生成関数（app.ts m2FrameURI の移植・小型 t=2）＝カードの枠がアプリと画素単位で一致 =====
+(() => {
+  const PO = [3,1,1,0,0], PI = [2,1,0]; // M2_PROF_OUT_S / M2_PROF_IN_S
+  const size = 18, t = 2, line = "#f2f3f5", fill = "#000";
+  const ins = (y,prof,s) => y < prof.length ? prof[y] : (y >= s - prof.length ? prof[s-1-y] : 0);
+  const inMask = (x,y,s,prof) => { const i = ins(y,prof,s); return x >= i && x <= s-1-i; };
+  let rects = "";
+  for (let y=0;y<size;y++) for (let x=0;x<size;x++) {
+    if (!inMask(x,y,size,PO)) continue;
+    const inner = x>=t && x<size-t && y>=t && y<size-t && inMask(x-t,y-t,size-2*t,PI);
+    rects += `<rect x="${x}" y="${y}" width="1" height="1" fill="${inner?fill:line}"/>`;
+  }
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" shape-rendering="crispEdges">${rects}</svg>`;
+  const uri = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+  // 大窓（詳細モーダル用）＝アプリのモーダルと同じ通常サイズプロファイル（角8px・t=3・10px枠）
+  const PO_L = [5,3,2,1,1,0,0,0], PI_L = [3,1,1,0,0], sizeL = 30, tL = 3;
+  let rectsL = "";
+  for (let y=0;y<sizeL;y++) for (let x=0;x<sizeL;x++) {
+    if (!inMask(x,y,sizeL,PO_L)) continue;
+    const inner = x>=tL && x<sizeL-tL && y>=tL && y<sizeL-tL && inMask(x-tL,y-tL,sizeL-2*tL,PI_L);
+    rectsL += `<rect x="${x}" y="${y}" width="1" height="1" fill="${inner?fill:line}"/>`;
+  }
+  const svgL = `<svg xmlns="http://www.w3.org/2000/svg" width="${sizeL}" height="${sizeL}" shape-rendering="crispEdges">${rectsL}</svg>`;
+  const uriL = `url("data:image/svg+xml,${encodeURIComponent(svgL)}")`;
+  // 金のピクセル角ボタン（DLボタン用）＝線も面も金＝ソリッドな金の札（ホバーは明るい金）
+  const goldBtn = (hex) => {
+    let r = "";
+    for (let y=0;y<size;y++) for (let x=0;x<size;x++) { if (!inMask(x,y,size,PO)) continue; r += `<rect x="${x}" y="${y}" width="1" height="1" fill="${hex}"/>`; }
+    return `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" shape-rendering="crispEdges">${r}</svg>`)}")`;
+  };
+  const st = document.createElement("style");
+  st.textContent = `.fcard{border:6px solid transparent;border-image:${uri} 6 fill / 6px stretch;}` +
+    `.wmodal{border:10px solid transparent;border-image:${uriL} 10 fill / 10px stretch;background:transparent;}` + // 詳細＝アプリと同じ白枠の大窓
+    `.dlbtn{border:8px solid transparent;border-image:${goldBtn("#a2883b")} 6 fill / 8px stretch;border-radius:0;background:transparent;}` +
+    `.dlbtn:hover{border-image:${goldBtn("#b89a45")} 6 fill / 8px stretch;background:transparent;}`; // ピクセル角の金札＝M2の文法（角丸長方形だけ浮いていた・本人指摘）
+  document.head.appendChild(st);
+})();
+
+// ===== 作品データ取得（サムネアニメ・詳細デモで共用・キャッシュ1本） =====
+// ★フィードより**前**に定義する：後置きだとサムネアニメの `window.__fetchArt` 参照が未定義で即 return＝
+//   トリミングもアニメも効かず素のサムネのまま（実バグ 2026-07-24）。
+(() => {
+  const URL_ = "https://ofvicmufibwzfwjdlcwj.supabase.co";
+  const artCache = new Map();
+  window.__fetchArt = async function fetchArt(dataPath){
+    if (artCache.has(dataPath)) return artCache.get(dataPath);
+    const r = await fetch(`${URL_}/storage/v1/object/public/art/${dataPath}`);
+    const j = await r.json();
+    const S = {}, F = {};
+    for (const [k, arr] of Object.entries(j.states || {})) {
+      const urls = (arr || []).map(f => f && f.url).filter(Boolean);
+      if (urls.length) { S[k] = urls; F[k] = (j.fps && j.fps[k]) || 12; }
+    }
+    const out = { S, F };
+    artCache.set(dataPath, out);
+    return out;
+  };
+})();
+
+// ===== 共有プラットフォーム＝本物のフィードをリアルタイム取得（アプリと同じ公開読み取り・RLS保護・同じ描画文法） =====
+(() => {
+  const URL_ = "https://ofvicmufibwzfwjdlcwj.supabase.co";
+  const KEY = "sb_publishable_u-mNdqxUJBBjkmKXr95MtQ_zjfIbEYp";
+  const grid = document.getElementById("feedgrid");
+  const esc = (s) => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  const PERSON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
+  // 背景＝アプリの bgCssOf/checkerCss の**完全移植**（保存色×輝度で市松の2色目を導出。 未保存＝#111317の市松）
+  const hexToRgb = (hex) => { const h = hex.replace("#",""); return [0,1,2].map(i => parseInt(h.length===3 ? h[i]+h[i] : h.substr(i*2,2),16)); };
+  const checkerCss = (hex, tile) => {
+    const rgb = hexToRgb(hex);
+    const lum = (0.299*rgb[0] + 0.587*rgb[1] + 0.114*rgb[2]) / 255;
+    const amt = lum < 0.5 ? 0.14 : -0.14;
+    const f = (c) => Math.max(0, Math.min(255, Math.round(amt > 0 ? c + (255-c)*amt : c*(1+amt))));
+    return `repeating-conic-gradient(rgb(${rgb.join(",")}) 0% 25%, rgb(${rgb.map(f).join(",")}) 0% 50%) 0/${tile}px ${tile}px`;
+  };
+  const bgCssOf = (bg, tile) => !bg ? checkerCss("#111317", tile) : (bg.checker ? checkerCss(bg.color, tile) : bg.color);
+  // サムネのトリミング＝アプリの cropToContent と同じ（不透明部分の外接矩形に詰める＝中身の大きさが揃う）
+  const cropCache = new Map();
+  function cropToContent(url){
+    if (cropCache.has(url)) return Promise.resolve(cropCache.get(url));
+    return new Promise((resolve) => {
+      const img = new Image(); img.crossOrigin = "anonymous";
+      img.onload = () => {
+        try {
+          const w = img.naturalWidth, h = img.naturalHeight;
+          const cv = document.createElement("canvas"); cv.width = w; cv.height = h;
+          const ctx = cv.getContext("2d", { willReadFrequently: true });
+          ctx.imageSmoothingEnabled = false; ctx.drawImage(img, 0, 0);
+          const d = ctx.getImageData(0, 0, w, h).data;
+          let minX=w,minY=h,maxX=-1,maxY=-1;
+          for (let y=0;y<h;y++) for (let x=0;x<w;x++) if (d[(y*w+x)*4+3] > 8) { if(x<minX)minX=x; if(y<minY)minY=y; if(x>maxX)maxX=x; if(y>maxY)maxY=y; }
+          if (maxX < 0) { cropCache.set(url,url); resolve(url); return; }
+          const cw=maxX-minX+1, ch=maxY-minY+1;
+          const oc = document.createElement("canvas"); oc.width=cw; oc.height=ch;
+          const octx = oc.getContext("2d"); octx.imageSmoothingEnabled = false;
+          octx.drawImage(img, minX, minY, cw, ch, 0, 0, cw, ch);
+          const out = oc.toDataURL("image/png"); cropCache.set(url,out); resolve(out);
+        } catch { resolve(url); }
+      };
+      img.onerror = () => resolve(url);
+      img.src = url;
+    });
+  }
+  window.__feedWorks = []; // 詳細モーダル用に保持
+  fetch(`${URL_}/rest/v1/works?select=name,thumb_url,data_path,like_count,bg,price,price_label,reacts,profiles!works_owner_fkey(display_name,handle,avatar)&published=eq.true&order=created_at.desc&limit=12`,
+    { headers: { apikey: KEY, Authorization: `Bearer ${KEY}` } })
+    .then(r => r.json())
+    .then(rows => {
+      if (!Array.isArray(rows) || rows.length === 0) throw 0;
+      window.__feedWorks = rows;
+      const en = document.documentElement.classList.contains("en");
+      grid.innerHTML = rows.map((w, i) => {
+        const p = w.profiles || {};
+        const ava = (p.avatar && String(p.avatar).startsWith("data:")) ? `<img src="${esc(p.avatar)}" alt="">` : PERSON;
+        const badge = w.price > 0
+          ? `<span class="fbadge paid">${esc(w.price_label || (en ? "PAID" : "有料"))}</span>`
+          : `<span class="fbadge">${en ? "FREE" : "無料"}</span>`;
+        return `<div class="fcard" data-wi="${i}" style="cursor:pointer;">
+          <div class="fthumb" style="background:${bgCssOf(w.bg, 16)};"><img data-crop="${esc(w.thumb_url||"")}" alt="${esc(w.name||"")}" loading="lazy"></div>
+          <div class="fmeta">
+            <span class="fnames"><span class="fnm">${esc(w.name||"")}</span>
+              <span class="fau"><span class="ava">${ava}</span><span class="aun">${esc(p.display_name||"")}</span></span></span>
+            <span class="fright"><span class="flk">♥ ${Number(w.like_count||0)}</span>${badge}</span>
+          </div></div>`;
+      }).join("");
+      grid.querySelectorAll("img[data-crop]").forEach(im => cropToContent(im.dataset.crop).then(u => { if (!im.dataset.anim) im.src = u; })); // まず静止トリミング（アニメ取得までのつなぎ）
+      grid.querySelectorAll(".fcard[data-wi]").forEach(c => c.addEventListener("click", () => window.__openWorkModal?.(Number(c.dataset.wi))));
+      // ★アプリと同じサムネ再生（startThumbnailAnims の移植・v2.399仕様）：**待機（idle）アニメだけ**をループ。
+      //   トリミングも cropFramesToGlobalContent と同じ＝**idleコマ間の共通bbox**（全状態unionではない＝
+      //   歩き等の横に広い状態に引っ張られて絵が小さく写らない）。 ＝「枠に対する絵の大きさ」がアプリと一致。
+      rows.forEach(async (w, i) => {
+        if (!w.data_path || !window.__fetchArt) return;
+        try {
+          const { S, F } = await window.__fetchArt(w.data_path);
+          const allUrls = [...new Set(S.idle || [])];
+          if (!allUrls.length) return;
+          const imgs = await Promise.all(allUrls.map(u => new Promise(res => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = u; })));
+          let minX = 1e9, minY = 1e9, maxX = -1, maxY = -1;
+          const cv = document.createElement("canvas"), cx = cv.getContext("2d", { willReadFrequently: true });
+          for (const im of imgs) {
+            if (!im) continue;
+            cv.width = im.width; cv.height = im.height; cx.clearRect(0,0,cv.width,cv.height); cx.drawImage(im, 0, 0);
+            const d = cx.getImageData(0, 0, im.width, im.height).data;
+            for (let y = 0; y < im.height; y++) for (let x = 0; x < im.width; x++)
+              if (d[(y*im.width+x)*4+3] > 8) { if(x<minX)minX=x; if(y<minY)minY=y; if(x>maxX)maxX=x; if(y>maxY)maxY=y; }
+          }
+          if (maxX < 0) return;
+          const cw = maxX-minX+1, ch = maxY-minY+1;
+          const cropU = new Map(); // url -> 共通bboxで切ったdataURL
+          imgs.forEach((im, j) => { if (!im) return;
+            const oc = document.createElement("canvas"); oc.width = cw; oc.height = ch;
+            const octx = oc.getContext("2d"); octx.imageSmoothingEnabled = false;
+            octx.drawImage(im, minX, minY, cw, ch, 0, 0, cw, ch);
+            cropU.set(allUrls[j], oc.toDataURL("image/png")); });
+          // 待機アニメだけをループ（idleのFPS・[1,120]クランプ＝実機と同一解釈）
+          const dur = 1000 / Math.max(1, Math.min(120, F.idle || 12));
+          const seq = (S.idle || []).filter(u => cropU.has(u)).map(u => [cropU.get(u), dur]);
+          const el = grid.querySelector(`.fcard[data-wi="${i}"] img`);
+          if (!el || !seq.length) return;
+          el.dataset.anim = "1";
+          let fi = 0;
+          const tick = () => { if (!el.isConnected) return; el.src = seq[fi][0]; const d = seq[fi][1]; fi = (fi+1) % seq.length; setTimeout(tick, d); };
+          tick();
+        } catch { /* 取得失敗＝静止トリミングのまま */ }
+      });
+    })
+    .catch(() => {
+      const en = document.documentElement.classList.contains("en");
+      document.getElementById("feed-empty").innerHTML = en
+        ? "Couldn't load the live feed. Open the app to browse works."
+        : "読み込めませんでした（アプリ内の共有プラットフォームからご覧いただけます）";
+    });
+  window.__bgCssOf = bgCssOf; // 詳細モーダルでも同じ背景合成を使う
+})();
+
+// ===== 詳細モーダル＝作品の全データを取得して「触れるデモ」で動かす（アプリの共有詳細と同じ意味論） =====
+(() => {
+  const URL_ = "https://ofvicmufibwzfwjdlcwj.supabase.co";
+  const esc = (s) => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  const PERSON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
+  const REACT_LABEL = { idle:["通常","idle"], cursor:["カーソル追従","cursor"], click:["クリック","click"], pat:["なで","pat"],
+    scroll:["スクロール反応","scroll"], walk:["歩く","walk"], sleep:["寝る","sleep"], typing:["タイピング反応","typing"], notify:["タイマー・アラーム","notify"], drag:["ドラッグ中","drag"] };
+  const fetchArt = (p) => window.__fetchArt(p); // 定義は先頭のブロック（フィードと共用キャッシュ）
+  // 触れるミニデモ（ヒーローと同じ意味論：カーソル8方向/クリック/なで/スクロール/タイピング/ドラッグ/散歩/眠り）
+  function spawnDemo(stage, S, F){
+    const img = document.createElement("img");
+    img.className = "wm-pet";
+    stage.appendChild(img);
+    const r0 = stage.getBoundingClientRect();
+    let sizePx = Math.round(Math.min(r0.height * 0.42, 200));
+    img.style.width = img.style.height = sizePx + "px";
+    // 大きさスライダー（アプリの共有詳細と同じ：左下「大きさ」＋右下px表示・48〜360px）
+    const en0 = document.documentElement.classList.contains("en");
+    const bar = document.createElement("div");
+    bar.style.cssText = "position:absolute;left:12px;right:12px;bottom:10px;display:flex;align-items:center;gap:10px;z-index:2;";
+    bar.innerHTML = `<span style="font-size:11px;color:#e8e9ec;background:rgba(6,8,12,.6);border-radius:999px;padding:2px 9px;">${en0 ? "Size" : "大きさ"}</span>
+      <input type="range" min="48" max="360" value="${sizePx}" style="flex:1;height:4px;accent-color:var(--accent);cursor:pointer;">
+      <span class="wm-szv" style="font-size:11px;color:#e8e9ec;background:rgba(6,8,12,.6);border-radius:999px;padding:2px 9px;">${sizePx}px</span>`;
+    stage.appendChild(bar);
+    bar.addEventListener("pointerdown", (e) => e.stopPropagation());
+    const szIn = bar.querySelector("input"), szV = bar.querySelector(".wm-szv");
+    szIn.addEventListener("input", () => { sizePx = Number(szIn.value); applySize(); szV.textContent = sizePx + "px"; });
+    // ★大きさ＝実体(bbox)基準（実機の「大きさ」スライダーと同じ意味論）。 idle共通bboxを測ってキャンバス倍率へ換算
+    let bb = null;
+    (function measure(){
+      const urls = S.idle || [];
+      let done = 0, minX = 1e9, minY = 1e9, maxX = -1, maxY = -1, cw = 0, ch = 0;
+      if (!urls.length) return;
+      urls.forEach(u => { const im = new Image(); im.onload = () => {
+        cw = im.width; ch = im.height;
+        const c = document.createElement("canvas"); c.width = cw; c.height = ch;
+        const cx2 = c.getContext("2d", { willReadFrequently: true }); cx2.drawImage(im, 0, 0);
+        const d = cx2.getImageData(0, 0, cw, ch).data;
+        for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++)
+          if (d[(y*cw+x)*4+3] > 8) { if(x<minX)minX=x; if(y<minY)minY=y; if(x>maxX)maxX=x; if(y>maxY)maxY=y; }
+        if (++done === urls.length && maxX >= 0) { bb = { cw, ch, l:minX, t:minY, r:maxX, b:maxY }; applySize(); layout(); }
+      }; im.src = u; });
+    })();
+    const snapScale2 = (targetPx, bboxH) => { const d = window.devicePixelRatio || 1; return Math.max(1, Math.round(targetPx * d / bboxH)) / d; };
+    function modalScale(){ return bb ? snapScale2(sizePx, bb.b - bb.t + 1) : 1; }
+    function applySize(){
+      if (!bb) { img.style.width = img.style.height = sizePx + "px"; return; } // 計測前＝暫定（すぐ実体基準に切替わる）
+      const scale = modalScale(); // 整数倍スナップ＝形を優先（実機の既定と同じ）
+      img.style.width = (bb.cw * scale) + "px";
+      img.style.height = (bb.ch * scale) + "px";
+    }
+    applySize();
+    let px = 0.5, pyF = 0.72, cur = "", idx = 0, once = false, timer = 0;
+    let walking = false, walkRaf = 0, walkTimer = 0, cleanupFns = [];
+    const layout = () => { const r = stage.getBoundingClientRect();
+      let ox = 0, oy = 0;
+      if (bb) { const scale = modalScale();
+        ox = (bb.cw/2 - (bb.l + bb.r + 1)/2) * scale;  // 実体中心＝置いた位置（キャンバス余白に影響されない）
+        oy = (bb.ch - (bb.b + 1)) * scale; }            // 実体下端＝足元
+      img.style.left = (px*r.width + ox)+"px"; img.style.top = (pyF*r.height + oy)+"px"; };
+    const play = (key, one=false) => {
+      if (!S[key] || !S[key].length) key = S.idle ? "idle" : Object.keys(S)[0];
+      if (!one && cur === key) return;
+      cur = key; once = one; idx = 0;
+      clearInterval(timer);
+      const fps = Math.max(1, Math.min(120, F[key] || 12));
+      img.src = S[key][0];
+      timer = setInterval(() => {
+        idx++;
+        if (once && idx >= S[cur].length) { once = false; play("idle"); return; }
+        idx %= S[cur].length; img.src = S[cur][idx];
+      }, 1000/fps);
+    };
+    // ピクセル hit-test（実機と同じ＝不透明の上だけ反応）
+    const pxc = new Map();
+    const pxInfo = (url) => { let i = pxc.get(url); if (i !== undefined) return i;
+      const im = new Image(); im.src = url;
+      if (!im.complete) { pxc.set(url, null); im.onload = () => { pxc.delete(url); pxInfo(url); }; return null; }
+      const c = document.createElement("canvas"); c.width = im.width; c.height = im.height;
+      const cx = c.getContext("2d", { willReadFrequently: true }); cx.drawImage(im, 0, 0);
+      i = { ctx: cx, w: im.width, h: im.height }; pxc.set(url, i); return i; };
+    const onOpaque = (e) => { const ir = img.getBoundingClientRect();
+      if (!(e.clientX>=ir.left&&e.clientX<=ir.right&&e.clientY>=ir.top&&e.clientY<=ir.bottom)||!ir.width) return false;
+      const inf = pxInfo(img.src); if (!inf) return true;
+      const lx = Math.floor((e.clientX-ir.left)/ir.width*inf.w), ly = Math.floor((e.clientY-ir.top)/ir.height*inf.h);
+      try { return inf.ctx.getImageData(lx,ly,1,1).data[3] > 8; } catch { return true; } };
+    let grab = null, hoverT = 0, wheelT = 0, typeT = 0;
+    img.addEventListener("pointerdown", (e) => {
+      if (!onOpaque(e)) return;
+      e.preventDefault(); wake(); walking = false; cancelAnimationFrame(walkRaf); clearTimeout(walkTimer);
+      const r = stage.getBoundingClientRect();
+      grab = { ox: px*r.width-(e.clientX-r.left), oy: pyF*r.height-(e.clientY-r.top), sx: e.clientX, sy: e.clientY, moved: false };
+      try { img.setPointerCapture(e.pointerId); } catch {}
+    });
+    img.addEventListener("pointermove", (e) => {
+      if (!grab) return;
+      if (!grab.moved && Math.hypot(e.clientX-grab.sx, e.clientY-grab.sy) > 4) { grab.moved = true; img.style.cursor = "grabbing"; if (S.drag) play("drag"); }
+      if (!grab.moved) return;
+      const r = stage.getBoundingClientRect();
+      const minY = Math.min(0.9, sizePx / r.height + 0.02); // 実体高さ基準（キャンバス高だと拡大時に逆転→床固定になる実バグ）
+      px = Math.max(0.06, Math.min(0.94, (e.clientX-r.left+grab.ox)/r.width));
+      pyF = Math.max(minY, Math.min(0.97, (e.clientY-r.top+grab.oy)/r.height));
+      layout();
+    });
+    const endG = () => { if (!grab) return; const was = grab.moved; grab = null; img.style.cursor = "grab";
+      if (!was) play("click", true); else { once = false; play("idle"); } schedWalk(); };
+    img.addEventListener("pointerup", endG); img.addEventListener("pointercancel", endG);
+    let scrollHold = false;
+    // なで（絵の上で左右3往復＝実機と同じ判定）＋長時間放置（30秒で寝る・操作で起きる）
+    let patLastX = 0, patSign = 0, patRev = 0, patWin = 0, patT = 0, patOn = false, sleepT = 0;
+    const wake = () => { if (cur === "sleep") play("idle"); clearTimeout(sleepT); sleepT = setTimeout(() => { if (cur === "idle" && S.sleep) play("sleep"); }, 30000); };
+    wake();
+    cleanupFns.push(() => { clearTimeout(sleepT); clearTimeout(patT); });
+    stage.addEventListener("pointermove", (e) => {
+      wake();
+      if (once || walking || grab || scrollHold) return; // スクロール反応中はカーソル追従に切り替えない
+      const ir = img.getBoundingClientRect();
+      const overPet = onOpaque(e);
+      img.style.cursor = overPet ? "grab" : "default";
+      if (overPet && S.pat) {
+        const dx = e.clientX - patLastX; patLastX = e.clientX;
+        if (Math.abs(dx) > 1) {
+          const sign = dx > 0 ? 1 : -1;
+          if (patOn) { clearTimeout(patT); patT = setTimeout(() => { patOn = false; if (!once && !grab) play("idle"); }, 550); }
+          else if (patSign !== 0 && sign !== patSign) {
+            const now = performance.now();
+            if (patRev === 0 || now - patWin > 1100) { patRev = 1; patWin = now; } else patRev++;
+            if (patRev >= 3) { patOn = true; patRev = 0; play("pat"); patT = setTimeout(() => { patOn = false; if (!once && !grab) play("idle"); }, 550); }
+          }
+          patSign = sign;
+        }
+        if (patOn) return;
+      }
+      const cx = ir.left+ir.width/2, cy = ir.top+ir.height/2;
+      const oct = Math.round(Math.atan2(e.clientY-cy, e.clientX-cx)/(Math.PI/4)) & 7;
+      const key = ["cursorE","cursorSE","cursorS","cursorSW","cursorW","cursorNW","cursorN","cursorNE"][oct];
+      if (!patOn) play(S[key] ? key : "cursor");
+      clearTimeout(hoverT); hoverT = setTimeout(() => { if (!once && !walking && !grab && !scrollHold && !patOn) play("idle"); }, 600);
+    });
+    stage.addEventListener("wheel", (e) => { if (!S.scroll) return; e.preventDefault(); wake();
+      if (walking) { walking = false; cancelAnimationFrame(walkRaf); schedWalk(); }
+      scrollHold = true;
+      if (!once && !grab) play("scroll");
+      clearTimeout(wheelT); wheelT = setTimeout(() => { scrollHold = false; if (!once && !grab && cur === "scroll") play("idle"); }, 450); }, { passive: false });
+    const keyH = (e) => { const t = e.target; if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return; if (!S.typing || grab) return; wake();
+      if (walking) { walking = false; cancelAnimationFrame(walkRaf); schedWalk(); }
+      if (!once) play("typing");
+      clearTimeout(typeT); typeT = setTimeout(() => { if (!once && !grab && cur === "typing") play("idle"); }, 700); };
+    window.addEventListener("keydown", keyH);
+    cleanupFns.push(() => window.removeEventListener("keydown", keyH));
+    function schedWalk(){ clearTimeout(walkTimer); if (!Object.keys(S).some(k=>k.startsWith("walk"))) return; walkTimer = setTimeout(() => {
+      if (once || grab || cur !== "idle") { schedWalk(); return; }
+      const tx = 0.12 + Math.random()*0.76; if (Math.abs(tx-px) < 0.06) { schedWalk(); return; }
+      walking = true;
+      play(tx > px ? (S.walkE ? "walkE" : "walk") : (S.walkW ? "walkW" : "walk"));
+      let last = performance.now();
+      const step = (now) => { if (!walking) return;
+        const r = stage.getBoundingClientRect(); const dt = (now-last)/1000; last = now;
+        const dir = Math.sign(tx-px); px += dir*(55*dt)/r.width;
+        if ((dir>0&&px>=tx)||(dir<0&&px<=tx)) { px = tx; layout(); walking = false; play("idle"); schedWalk(); return; }
+        layout(); walkRaf = requestAnimationFrame(step); };
+      walkRaf = requestAnimationFrame(step);
+    }, 5000 + Math.random()*5000); }
+    layout(); play("idle"); schedWalk();
+    return () => { clearInterval(timer); cancelAnimationFrame(walkRaf); clearTimeout(walkTimer); clearTimeout(hoverT); clearTimeout(wheelT); clearTimeout(typeT); cleanupFns.forEach(f=>f()); };
+  }
+  let closeCur = null;
+  window.__openWorkModal = async (i) => {
+    const w = (window.__feedWorks || [])[i];
+    if (!w || !w.data_path) return;
+    const en = document.documentElement.classList.contains("en");
+    const p = w.profiles || {};
+    const ava = (p.avatar && String(p.avatar).startsWith("data:")) ? `<img src="${esc(p.avatar)}" alt="">` : PERSON;
+    const reacts = (Array.isArray(w.reacts) ? w.reacts : []).map(k => `<span class="pill">${(REACT_LABEL[k]||[k,k])[en?1:0]}</span>`).join("");
+    const bg = document.createElement("div");
+    bg.className = "wmodal-bg";
+    bg.innerHTML = `<div class="wmodal">
+      <span class="wm-close">✕</span>
+      <div class="wm-stage" style="background:${window.__bgCssOf ? window.__bgCssOf(w.bg, 22) : "#050507"};"></div>
+      <div class="wm-side">
+        <div class="wm-title">${esc(w.name||"")}</div>
+        <div class="wm-author"><span class="ava">${ava}</span><span>${esc(p.display_name||"")}<div class="hd">${p.handle ? "@"+esc(p.handle) : ""}</div></span></div>
+        <div class="wm-likes">♥ ${Number(w.like_count||0)}</div>
+        ${reacts ? `<div class="wm-reacts">${reacts}</div>` : ""}
+        <div class="wm-note">${en ? "This is a live demo. Try the reactions listed above." : "これは実際に動くデモです。上に表示されている反応を試せます。"}</div>
+        <a class="wm-cta" href="#dl-bottom">${en ? "Get it in the app" : "アプリで入手する"}</a>
+      </div></div>`;
+    document.body.appendChild(bg);
+    const close = () => { closeCur?.(); closeCur = null; bg.remove(); };
+    bg.addEventListener("click", (e) => { if (e.target === bg) close(); });
+    bg.querySelector(".wm-close").addEventListener("click", close);
+    bg.querySelector(".wm-cta").addEventListener("click", close);
+    try {
+      const { S, F } = await fetchArt(w.data_path);
+      closeCur = spawnDemo(bg.querySelector(".wm-stage"), S, F);
+    } catch { /* データが読めない＝静止サムネのまま */ }
+  };
+})();
+
+// ===== 小物：フッターの眠るPim＋スクロール出現 =====
+(() => {
+  const S = window.PIM.states, F = window.PIM.fps;
+  const fp = document.getElementById("foot-pim");
+  if (fp && S.sleep) fp.src = S.sleep[0];
+  const io = new IntersectionObserver((es) => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } }), { threshold: 0.12 });
+  document.querySelectorAll(".rev").forEach(el => io.observe(el));
+})();
+
+</script>
+</body>
+</html>
