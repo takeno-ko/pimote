@@ -200,7 +200,8 @@
   .wm-likes{font-size:12px;color:var(--ink-dim);}
   .wm-desc{font-size:12px;color:var(--ink2);line-height:1.9;text-wrap:pretty;}
   .wm-reacts{display:flex;flex-wrap:wrap;gap:6px;}
-  .wm-reacts .pill{font-size:11px;border:1px solid rgba(139,143,152,.5);border-radius:3px;padding:2px 9px;color:var(--ink2);}
+  .wm-reacts .pill{font-size:11px;border:1px solid rgba(139,143,152,.5);border-radius:3px;padding:2px 9px;color:var(--ink2);cursor:pointer;}
+  .wm-reacts .pill.on{background:var(--accent);color:#000;border-color:var(--accent);} /* デモに今出ている状態＝金（アプリv2.516と同じ） */
   .wm-note{font-size:11px;color:var(--ink-dim);line-height:1.7;margin-top:auto;}
   .wm-cta{display:block;text-align:center;background:var(--accent);color:#000;border-radius:9px;padding:10px;font-size:13px;font-weight:700;text-decoration:none;}
   @media (max-width:640px){ .wmodal{flex-direction:column;height:min(640px,92vh);} .wm-side{width:100%;border-left:none;border-top:1px solid rgba(139,143,152,.35);} }
@@ -456,7 +457,7 @@
       <a href="https://earthy-mirror-141.notion.site/Pimote-Privacy-Policy-39ce74c26f9581c09c8cff271b5679bf" target="_blank" rel="noopener"><span class="ja-t">プライバシーポリシー</span><span class="en-t">Privacy</span></a>
       <a href="mailto:pimote.support@gmail.com"><span class="ja-t">お問い合わせ</span><span class="en-t">Contact</span></a>
     </div>
-    <div class="cr">© 2026 takenoko — Pimote <span id="v-check" style="opacity:.4;">rev.120</span></div>
+    <div class="cr">© 2026 takenoko — Pimote <span id="v-check" style="opacity:.4;">rev.121</span></div>
   </footer>
 </div>
 
@@ -1004,7 +1005,7 @@ applyDl();
   const fetchArt = (p) => window.__fetchArt(p); // 定義は先頭のブロック（フィードと共用キャッシュ）
   const REACT_ORDER = ["idle","cursor","click","pat","drag","typing","scroll","walk","sleep","notify","charging","batteryLow"]; // 反応ピルの固定順（アプリv2.512と同じ）
   // 触れるミニデモ（ヒーローと同じ意味論：カーソル8方向/クリック/なで/スクロール/タイピング/ドラッグ/散歩/眠り）
-  function spawnDemo(stage, S, F){
+  function spawnDemo(stage, S, F, onState){
     const img = document.createElement("img");
     img.className = "wm-pet";
     stage.appendChild(img);
@@ -1059,6 +1060,7 @@ applyDl();
       if (!S[key] || !S[key].length) key = S.idle ? "idle" : Object.keys(S)[0];
       if (!one && cur === key) return;
       cur = key; once = one; idx = 0;
+      if (onState) onState(key.replace(/(N|NE|E|SE|S|SW|W|NW)$/, "")); // 表示中の状態を通知（ピルの金ハイライト用）
       clearInterval(timer);
       const fps = Math.max(1, Math.min(120, F[key] || 12));
       img.src = S[key][0];
@@ -1159,7 +1161,10 @@ applyDl();
       walkRaf = requestAnimationFrame(step);
     }, 5000 + Math.random()*5000); }
     layout(); play("idle"); schedWalk();
-    return () => { clearInterval(timer); cancelAnimationFrame(walkRaf); clearTimeout(walkTimer); clearTimeout(hoverT); clearTimeout(wheelT); clearTimeout(typeT); cleanupFns.forEach(f=>f()); };
+    const closeFn = () => { clearInterval(timer); cancelAnimationFrame(walkRaf); clearTimeout(walkTimer); clearTimeout(hoverT); clearTimeout(wheelT); clearTimeout(typeT); cleanupFns.forEach(f=>f()); };
+    closeFn.play = play; // ピルからの再生用（アプリv2.516移植）
+    closeFn.stopWalk = () => { walking = false; cancelAnimationFrame(walkRaf); clearTimeout(walkTimer); };
+    return closeFn;
   }
   let closeCur = null;
   window.__openWorkModal = async (i) => {
@@ -1183,26 +1188,55 @@ applyDl();
         <div class="wm-title">${esc(w.name||"")}</div>
         <div class="wm-author"><span class="ava">${ava}</span><span>${esc(p.display_name||"")}<div class="hd">${p.handle ? "@"+esc(p.handle) : ""}</div></span></div>
         <div class="wm-likes">♥ ${Number(w.like_count||0)}</div>
-        ${w.description ? `<div class="wm-desc">${String(w.description).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</div>` : ""}
         ${reacts ? `<div class="wm-reacts">${reacts}</div>` : ""}
+        ${w.description ? `<div class="wm-desc">${String(w.description).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</div>` : ""}
         <div class="wm-note">${en ? "This is a live demo. Try the reactions listed above." : "これは実際に動くデモです。上に表示されている反応を試せます。"}</div>
         <a class="wm-cta" href="#dl-bottom">${en ? "Get it in the app" : "アプリで入手する"}</a>
       </div></div>`;
     document.body.appendChild(bg);
-    const close = () => { closeCur?.(); closeCur = null; bg.remove(); };
+    const close = () => { clearInterval(cycleT); closeCur?.(); closeCur = null; bg.remove(); };
     bg.addEventListener("click", (e) => { if (e.target === bg) close(); });
     bg.querySelector(".wm-close").addEventListener("click", close);
     bg.querySelector(".wm-cta").addEventListener("click", close);
+    let cycleT = 0; // カーソル追従ピル＝全方向巡回タイマー
     try {
       const { S, F } = await fetchArt(w.data_path);
       // ピル＝実際に読み込んだ作品の状態から組み立て直す（サーバー保存のreactsは旧データでズレていることがある・アプリv2.517と同じ）
       const rbox = bg.querySelector(".wm-reacts");
+      const stageEl = bg.querySelector(".wm-stage");
+      const ctl = spawnDemo(stageEl, S, F, (b) => {
+        rbox?.querySelectorAll(".pill").forEach(pl => pl.classList.toggle("on", pl.dataset.key === b)); // 表示中＝金
+      });
+      closeCur = ctl;
       if (rbox && S) {
+        const enN = document.documentElement.classList.contains("en");
         const bases = [...new Set(Object.keys(S).map(k => k.replace(/(N|NE|E|SE|S|SW|W|NW)$/, "")))]
           .sort((a, b) => { const ia = REACT_ORDER.indexOf(a), ib = REACT_ORDER.indexOf(b); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib); });
-        rbox.innerHTML = bases.map(k => `<span class="pill">${(REACT_LABEL[k]||[k,k])[document.documentElement.classList.contains("en")?1:0]}</span>`).join("");
+        rbox.innerHTML = bases.map(k => `<span class="pill" data-key="${k}">${(REACT_LABEL[k]||[k,k])[enN?1:0]}</span>`).join("");
+        rbox.querySelector('[data-key="idle"]')?.classList.add("on"); // 初期表示＝待機を金に（以降はonStateがライブ更新）
+        // クリック＝その状態を再生（アプリv2.516/517と同じ挙動）
+        rbox.querySelectorAll(".pill").forEach(pl => {
+          pl.addEventListener("click", () => {
+            const r = pl.dataset.key;
+            clearInterval(cycleT);
+            ctl.stopWalk();
+            if (r === "click") { ctl.play(S.click ? "click" : "idle", true); return; }        // 1回再生・再クリックで再再生
+            if (r === "cursor") {                                                              // 全方向を1秒ごとに巡回
+              const dirs = ["E","SE","S","SW","W","NW","N","NE"].map(d => "cursor"+d).filter(k => !!S[k]);
+              const list = S.cursor ? ["cursor", ...dirs] : dirs;
+              if (list.length) {
+                let di = 0; ctl.play(list[0]);
+                if (list.length > 1) cycleT = setInterval(() => { di = (di+1)%list.length; ctl.play(list[di]); }, 1000);
+              }
+              return;
+            }
+            const key = S[r] ? r : (Object.keys(S).find(k => k.indexOf(r) === 0) || "idle");
+            ctl.play(key);
+          });
+        });
+        // デモ画面にカーソルが入ったら固定解除＝触れるデモに戻る
+        stageEl.addEventListener("pointerenter", () => { if (cycleT) { clearInterval(cycleT); cycleT = 0; ctl.play("idle"); } });
       }
-      closeCur = spawnDemo(bg.querySelector(".wm-stage"), S, F);
     } catch { /* データが読めない＝静止サムネのまま */ }
   };
 })();
