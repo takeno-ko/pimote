@@ -455,7 +455,7 @@
       <a href="https://earthy-mirror-141.notion.site/Pimote-Privacy-Policy-39ce74c26f9581c09c8cff271b5679bf" target="_blank" rel="noopener"><span class="ja-t">プライバシーポリシー</span><span class="en-t">Privacy</span></a>
       <a href="mailto:pimote.support@gmail.com"><span class="ja-t">お問い合わせ</span><span class="en-t">Contact</span></a>
     </div>
-    <div class="cr">© 2026 takenoko — Pimote <span id="v-check" style="opacity:.4;">rev.115</span></div>
+    <div class="cr">© 2026 takenoko — Pimote <span id="v-check" style="opacity:.4;">rev.116</span></div>
   </footer>
 </div>
 
@@ -1166,7 +1166,13 @@ applyDl();
     const en = document.documentElement.classList.contains("en");
     const p = w.profiles || {};
     const ava = (p.avatar && String(p.avatar).startsWith("data:")) ? `<img src="${esc(p.avatar)}" alt="">` : PERSON;
-    const reacts = (Array.isArray(w.reacts) ? w.reacts : []).map(k => `<span class="pill">${(REACT_LABEL[k]||[k,k])[en?1:0]}</span>`).join("");
+    // 固定順ソート＝アプリv2.512と同じ（サーバーには「作者が状態を追加した順」の旧データが残っているため表示側で揃える）
+    const REACT_ORDER = ["idle","cursor","click","pat","drag","typing","scroll","walk","sleep","notify","charging","batteryLow"];
+    const rsorted = [...new Set(Array.isArray(w.reacts) ? w.reacts : [])].sort((a,b) => {
+      const ia = REACT_ORDER.indexOf(a), ib = REACT_ORDER.indexOf(b);
+      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+    });
+    const reacts = rsorted.map(k => `<span class="pill">${(REACT_LABEL[k]||[k,k])[en?1:0]}</span>`).join("");
     const bg = document.createElement("div");
     bg.className = "wmodal-bg";
     bg.innerHTML = `<div class="wmodal">
