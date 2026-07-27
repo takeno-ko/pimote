@@ -198,6 +198,7 @@
   .wm-author .ava svg{width:18px;height:18px;}
   .wm-author .hd{font-size:10px;color:var(--ink-dim);}
   .wm-likes{font-size:12px;color:var(--ink-dim);}
+  .wm-desc{font-size:12px;color:var(--ink2);line-height:1.9;text-wrap:pretty;}
   .wm-reacts{display:flex;flex-wrap:wrap;gap:6px;}
   .wm-reacts .pill{font-size:11px;border:1px solid rgba(139,143,152,.5);border-radius:3px;padding:2px 9px;color:var(--ink2);}
   .wm-note{font-size:11px;color:var(--ink-dim);line-height:1.7;margin-top:auto;}
@@ -455,7 +456,7 @@
       <a href="https://earthy-mirror-141.notion.site/Pimote-Privacy-Policy-39ce74c26f9581c09c8cff271b5679bf" target="_blank" rel="noopener"><span class="ja-t">プライバシーポリシー</span><span class="en-t">Privacy</span></a>
       <a href="mailto:pimote.support@gmail.com"><span class="ja-t">お問い合わせ</span><span class="en-t">Contact</span></a>
     </div>
-    <div class="cr">© 2026 takenoko — Pimote <span id="v-check" style="opacity:.4;">rev.116</span></div>
+    <div class="cr">© 2026 takenoko — Pimote <span id="v-check" style="opacity:.4;">rev.117</span></div>
   </footer>
 </div>
 
@@ -922,7 +923,7 @@ applyDl();
     });
   }
   window.__feedWorks = []; // 詳細モーダル用に保持
-  fetch(`${URL_}/rest/v1/works?select=name,thumb_url,data_path,like_count,bg,price,price_label,reacts,profiles!works_owner_fkey(display_name,handle,avatar)&published=eq.true&order=created_at.desc&limit=12`,
+  fetch(`${URL_}/rest/v1/works?select=name,thumb_url,data_path,like_count,bg,price,price_label,reacts,description,profiles!works_owner_fkey(display_name,handle,avatar)&published=eq.true&order=created_at.desc&limit=12`,
     { headers: { apikey: KEY, Authorization: `Bearer ${KEY}` } })
     .then(r => r.json())
     .then(rows => {
@@ -1182,6 +1183,7 @@ applyDl();
         <div class="wm-title">${esc(w.name||"")}</div>
         <div class="wm-author"><span class="ava">${ava}</span><span>${esc(p.display_name||"")}<div class="hd">${p.handle ? "@"+esc(p.handle) : ""}</div></span></div>
         <div class="wm-likes">♥ ${Number(w.like_count||0)}</div>
+        ${w.description ? `<div class="wm-desc">${String(w.description).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</div>` : ""}
         ${reacts ? `<div class="wm-reacts">${reacts}</div>` : ""}
         <div class="wm-note">${en ? "This is a live demo. Try the reactions listed above." : "これは実際に動くデモです。上に表示されている反応を試せます。"}</div>
         <a class="wm-cta" href="#dl-bottom">${en ? "Get it in the app" : "アプリで入手する"}</a>
