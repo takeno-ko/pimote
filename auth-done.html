@@ -22,9 +22,10 @@
 <body>
 <div class="card">
   <h1><span class="ok">✓</span> ログインできました</h1>
-  <p>Pimote のアプリに自動で戻ります。<br><b>このページは閉じて大丈夫です。</b></p>
-  <a class="btn" id="open-app" href="#">アプリが開かない場合はこちら</a>
-  <div class="note">Signed in. You can close this page — returning to the Pimote app automatically.</div>
+  <p>「<b>Pimote を開きますか？</b>」と表示されたら<br>「<b>Pimote を開く</b>」を押してください。<br>（起動中のアプリにログイン情報を渡す確認です）</p>
+  <p style="margin-top:12px;">そのあと、<b>このページは閉じて大丈夫です。</b></p>
+  <a class="btn" id="open-app" href="#">確認が出ない場合はこちら</a>
+  <div class="note">チェック「常に関連付けられたアプリで開く」を入れると、次回からこの確認は出ません。<br>Signed in — click "Open Pimote" in the browser dialog, then close this page.</div>
 </div>
 <script>
   // Supabaseからのリダイレクト（?code=... / #access_token=...）をそのままアプリのディープリンクへ転送
