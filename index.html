@@ -455,7 +455,7 @@
       <a href="https://earthy-mirror-141.notion.site/Pimote-Privacy-Policy-39ce74c26f9581c09c8cff271b5679bf" target="_blank" rel="noopener"><span class="ja-t">プライバシーポリシー</span><span class="en-t">Privacy</span></a>
       <a href="mailto:pimote.support@gmail.com"><span class="ja-t">お問い合わせ</span><span class="en-t">Contact</span></a>
     </div>
-    <div class="cr">© 2026 takenoko — Pimote <span id="v-check" style="opacity:.4;">rev.114</span></div>
+    <div class="cr">© 2026 takenoko — Pimote <span id="v-check" style="opacity:.4;">rev.115</span></div>
   </footer>
 </div>
 
@@ -1019,7 +1019,7 @@ applyDl();
     stage.appendChild(bar);
     bar.addEventListener("pointerdown", (e) => e.stopPropagation());
     const szIn = bar.querySelector("input"), szV = bar.querySelector(".wm-szv");
-    szIn.addEventListener("input", () => { sizePx = Number(szIn.value); applySize(); szV.textContent = sizePx + "px"; });
+    szIn.addEventListener("input", () => { sizePx = Number(szIn.value); applySize(); layout(); szV.textContent = sizePx + "px"; }); // layout()も呼ぶ＝足元・中心の固定を倍率変更に追従（キャンバス余白が多い作品＝Pimでズレる実バグ）
     // ★大きさ＝実体(bbox)基準（実機の「大きさ」スライダーと同じ意味論）。 idle共通bboxを測ってキャンバス倍率へ換算
     let bb = null;
     (function measure(){
