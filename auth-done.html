@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>ログイン完了 — Pimote</title>
+<link rel="icon" href="assets/favicon.png">
+<style>
+  @font-face{font-family:'BestTen CRT';src:url('assets/BestTen-CRT.sub.woff2') format('woff2');font-display:swap;ascent-override:84%;descent-override:16%;line-gap-override:0%;}
+  :root{--bg:#050507;--ink:#f2f3f5;--ink2:#b7bcc4;--accent:#a2883b;--line:#f2f3f5;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--ink);font-family:'BestTen CRT','DotGothic16',sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;}
+  .card{max-width:440px;width:100%;border:3px solid var(--line);border-radius:14px;padding:34px 30px;text-align:center;}
+  h1{font-size:22px;font-weight:400;margin-bottom:14px;text-shadow:.04em 0 0 currentColor;}
+  p{font-size:14px;color:var(--ink2);line-height:2;}
+  .ok{color:var(--accent);}
+  .btn{display:inline-block;margin-top:20px;background:var(--accent);color:#000;border:none;border-radius:10px;padding:12px 26px;font-family:inherit;font-size:14px;cursor:pointer;text-decoration:none;}
+  .note{font-size:12px;color:#8b8f98;margin-top:16px;line-height:1.9;}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1><span class="ok">✓</span> ログインできました</h1>
+  <p>Pimote のアプリに自動で戻ります。<br><b>このページは閉じて大丈夫です。</b></p>
+  <a class="btn" id="open-app" href="#">アプリが開かない場合はこちら</a>
+  <div class="note">Signed in. You can close this page — returning to the Pimote app automatically.</div>
+</div>
+<script>
+  // Supabaseからのリダイレクト（?code=... / #access_token=...）をそのままアプリのディープリンクへ転送
+  const target = "pimote://auth-callback" + location.search + location.hash;
+  document.getElementById("open-app").href = target;
+  location.href = target; // 自動でアプリへ（ブラウザが確認ダイアログを出す場合あり＝その時はボタンから）
+</script>
+</body>
+</html>
