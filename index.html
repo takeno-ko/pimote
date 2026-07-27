@@ -456,7 +456,7 @@
       <a href="https://earthy-mirror-141.notion.site/Pimote-Privacy-Policy-39ce74c26f9581c09c8cff271b5679bf" target="_blank" rel="noopener"><span class="ja-t">プライバシーポリシー</span><span class="en-t">Privacy</span></a>
       <a href="mailto:pimote.support@gmail.com"><span class="ja-t">お問い合わせ</span><span class="en-t">Contact</span></a>
     </div>
-    <div class="cr">© 2026 takenoko — Pimote <span id="v-check" style="opacity:.4;">rev.117</span></div>
+    <div class="cr">© 2026 takenoko — Pimote <span id="v-check" style="opacity:.4;">rev.118</span></div>
   </footer>
 </div>
 
@@ -1002,6 +1002,7 @@ applyDl();
   const REACT_LABEL = { idle:["通常","idle"], cursor:["カーソル追従","cursor"], click:["クリック","click"], pat:["なで","pat"],
     scroll:["スクロール反応","scroll"], walk:["歩く","walk"], sleep:["寝る","sleep"], typing:["タイピング反応","typing"], notify:["タイマー・アラーム","notify"], drag:["ドラッグ中","drag"] };
   const fetchArt = (p) => window.__fetchArt(p); // 定義は先頭のブロック（フィードと共用キャッシュ）
+  const REACT_ORDER = ["idle","cursor","click","pat","drag","typing","scroll","walk","sleep","notify","charging","batteryLow"]; // 反応ピルの固定順（アプリv2.512と同じ）
   // 触れるミニデモ（ヒーローと同じ意味論：カーソル8方向/クリック/なで/スクロール/タイピング/ドラッグ/散歩/眠り）
   function spawnDemo(stage, S, F){
     const img = document.createElement("img");
@@ -1168,7 +1169,6 @@ applyDl();
     const p = w.profiles || {};
     const ava = (p.avatar && String(p.avatar).startsWith("data:")) ? `<img src="${esc(p.avatar)}" alt="">` : PERSON;
     // 固定順ソート＝アプリv2.512と同じ（サーバーには「作者が状態を追加した順」の旧データが残っているため表示側で揃える）
-    const REACT_ORDER = ["idle","cursor","click","pat","drag","typing","scroll","walk","sleep","notify","charging","batteryLow"];
     const rsorted = [...new Set(Array.isArray(w.reacts) ? w.reacts : [])].sort((a,b) => {
       const ia = REACT_ORDER.indexOf(a), ib = REACT_ORDER.indexOf(b);
       return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
@@ -1195,6 +1195,13 @@ applyDl();
     bg.querySelector(".wm-cta").addEventListener("click", close);
     try {
       const { S, F } = await fetchArt(w.data_path);
+      // ピル＝実際に読み込んだ作品の状態から組み立て直す（サーバー保存のreactsは旧データでズレていることがある・アプリv2.517と同じ）
+      const rbox = bg.querySelector(".wm-reacts");
+      if (rbox && S) {
+        const bases = [...new Set(Object.keys(S).map(k => k.replace(/(N|NE|E|SE|S|SW|W|NW)$/, "")))]
+          .sort((a, b) => { const ia = REACT_ORDER.indexOf(a), ib = REACT_ORDER.indexOf(b); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib); });
+        rbox.innerHTML = bases.map(k => `<span class="pill">${(REACT_LABEL[k]||[k,k])[document.documentElement.classList.contains("en")?1:0]}</span>`).join("");
+      }
       closeCur = spawnDemo(bg.querySelector(".wm-stage"), S, F);
     } catch { /* データが読めない＝静止サムネのまま */ }
   };
