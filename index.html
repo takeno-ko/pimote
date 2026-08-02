@@ -457,7 +457,7 @@
       <a href="https://earthy-mirror-141.notion.site/Pimote-Privacy-Policy-39ce74c26f9581c09c8cff271b5679bf" target="_blank" rel="noopener"><span class="ja-t">プライバシーポリシー</span><span class="en-t">Privacy</span></a>
       <a href="mailto:pimote.support@gmail.com"><span class="ja-t">お問い合わせ</span><span class="en-t">Contact</span></a>
     </div>
-    <div class="cr">© 2026 takenoko — Pimote <span id="v-check" style="opacity:.4;">rev.128</span></div>
+    <div class="cr">© 2026 takenoko — Pimote <span id="v-check" style="opacity:.4;">rev.129</span></div>
   </footer>
 </div>
 
@@ -516,7 +516,10 @@ const setLang = (en) => {
 };
 document.getElementById("lang-ja").onclick = () => setLang(false);
 document.getElementById("lang-en").onclick = () => setLang(true);
-if (!/^ja/.test(navigator.language || "ja")) setLang(true);
+const langQ = new URLSearchParams(location.search).get("lang"); // en入口(en/)からの流入は英語を強制
+if (langQ === "en") setLang(true);
+else if (langQ === "ja") setLang(false);
+else if (!/^ja/.test(navigator.language || "ja")) setLang(true);
 { const hv = document.getElementById("hero-video"); if (hv && HERO_RM) { hv.removeAttribute("autoplay"); hv.autoplay = false; hv.pause(); hv.load(); } }
 
 // ===== DLボタン（URL未設定の間は公開予告） =====
