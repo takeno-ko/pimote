@@ -63,6 +63,7 @@
   .hero-row .stage-outer{flex:0 0 50%;min-width:0;}
   .hero-row .dl{margin-top:0;}
   /* 背景＝本物のWindowsデスクトップのスクショ（「デスクトップに置く」を文字通り見せる）。 床＝タスクバー上端 */
+  .hero-video{display:block;width:100%;height:auto;aspect-ratio:16/9;border:3px solid var(--line);border-radius:14px;background:#000;object-fit:cover;}
   .stage{position:relative;aspect-ratio:1916/1196;border:3px solid var(--line);border-radius:14px;overflow:hidden;cursor:default;
     background:url(assets/desktop.png) top left/cover no-repeat;} /* 本人提供の実デスクトップスクショ（2026-07-24差し替え・アイコン左上） */
   .stage .floor{position:absolute;left:0;right:0;bottom:6.4%;height:0;}
@@ -289,12 +290,7 @@
 
     <div class="hero-row">
     <div class="stage-outer">
-      <div class="stage" id="stage">
-        <span class="statebadge" id="statebadge">idle</span>
-        <span class="hint" id="hint"><span class="ja-t">カーソルを近づけたり、クリックしてみてください</span><span class="en-t">Move your cursor close, or click Pim</span></span>
-        <div class="floor"></div>
-        <img class="pim" id="pim" alt="Pim" draggable="false">
-      </div>
+      <video id="hero-video" class="hero-video" autoplay muted loop playsinline preload="metadata" width="1920" height="1080" poster="assets/poster_ja.jpg" src="assets/pimote_hero_ja_web.mp4"></video>
     </div>
     <div class="dl">
       <a class="dlbtn" id="dl-top" href="#" >
@@ -461,7 +457,7 @@
       <a href="https://earthy-mirror-141.notion.site/Pimote-Privacy-Policy-39ce74c26f9581c09c8cff271b5679bf" target="_blank" rel="noopener"><span class="ja-t">プライバシーポリシー</span><span class="en-t">Privacy</span></a>
       <a href="mailto:pimote.support@gmail.com"><span class="ja-t">お問い合わせ</span><span class="en-t">Contact</span></a>
     </div>
-    <div class="cr">© 2026 takenoko — Pimote <span id="v-check" style="opacity:.4;">rev.126</span></div>
+    <div class="cr">© 2026 takenoko — Pimote <span id="v-check" style="opacity:.4;">rev.127</span></div>
   </footer>
 </div>
 
@@ -495,7 +491,21 @@ window.addEventListener("resize", applyMobZoom);
 applyMobZoom();
 
 // ===== 言語切替 =====
+const HERO_RM = matchMedia("(prefers-reduced-motion: reduce)").matches; // 動きを減らす設定＝自動再生しない
+const syncHeroVideo = (en) => {
+  const hv = document.getElementById("hero-video");
+  if (!hv) return;
+  const base = en ? "en" : "ja";
+  const src = `assets/pimote_hero_${base}_web.mp4`;
+  if (hv.getAttribute("src") === src) return;
+  hv.poster = `assets/poster_${base}.jpg`;
+  hv.setAttribute("src", src);
+  hv.muted = true; // 属性だけだとsrc差し替え後に無視するブラウザがある＝プロパティでも固定
+  hv.load();
+  if (!HERO_RM) hv.play().catch(() => {});
+};
 const setLang = (en) => {
+  syncHeroVideo(en);
   document.documentElement.classList.toggle("en", en);
   document.documentElement.lang = en ? "en" : "ja";
   document.getElementById("lang-ja").classList.toggle("on", !en);
@@ -507,6 +517,7 @@ const setLang = (en) => {
 document.getElementById("lang-ja").onclick = () => setLang(false);
 document.getElementById("lang-en").onclick = () => setLang(true);
 if (!/^ja/.test(navigator.language || "ja")) setLang(true);
+{ const hv = document.getElementById("hero-video"); if (hv && HERO_RM) { hv.removeAttribute("autoplay"); hv.autoplay = false; hv.pause(); hv.load(); } }
 
 // ===== DLボタン（URL未設定の間は公開予告） =====
 function applyDl(){
@@ -531,6 +542,7 @@ applyDl();
   const img = document.getElementById("pim");
   const badge = document.getElementById("statebadge");
   const hint = document.getElementById("hint");
+  if (!stage || !img) return; // ヒーローは動画に置換（2026-08-02）＝触れるデモは休眠（要素を戻せば復活）
   const S = window.PIM.states, F = window.PIM.fps;
   // 位置＝足元（アンカー）基準：px=横（0..1）／pyF=縦（足元のステージ高さ比）。 実機と同じく**どこにでも置ける**（ドラッグ）。
   let px = 0.5;
