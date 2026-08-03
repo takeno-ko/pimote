@@ -457,7 +457,7 @@
       <a href="https://earthy-mirror-141.notion.site/Pimote-Privacy-Policy-39ce74c26f9581c09c8cff271b5679bf" target="_blank" rel="noopener"><span class="ja-t">プライバシーポリシー</span><span class="en-t">Privacy</span></a>
       <a href="mailto:pimote.support@gmail.com"><span class="ja-t">お問い合わせ</span><span class="en-t">Contact</span></a>
     </div>
-    <div class="cr">© 2026 takenoko — Pimote <span id="v-check" style="opacity:.4;">rev.129</span></div>
+    <div class="cr">© 2026 takenoko — Pimote <span id="v-check" style="opacity:.4;">rev.130</span></div>
   </footer>
 </div>
 
@@ -516,11 +516,39 @@ const setLang = (en) => {
 };
 document.getElementById("lang-ja").onclick = () => setLang(false);
 document.getElementById("lang-en").onclick = () => setLang(true);
+// ===== LP計測（Aptabase・Cookie不使用・匿名）＝page_view と dl_click の2本だけ =====
+const APTA_KEY = "A-US-7129489129";
+const aptaSession = Math.floor(Date.now() / 1000).toString() + Math.floor(Math.random() * 1e8).toString().padStart(8, "0");
+const apta = (name, props) => {
+  try {
+    fetch("https://us.aptabase.com/api/v0/event", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "App-Key": APTA_KEY },
+      credentials: "omit",
+      body: JSON.stringify({
+        timestamp: new Date().toISOString(),
+        sessionId: aptaSession,
+        eventName: name,
+        // isDebug＝本番ドメイン以外(ローカル確認等)はDebug側に隔離＝本番の数字を汚さない
+        systemProps: { locale: navigator.language || "", isDebug: location.hostname !== "takeno-ko.github.io", appVersion: "1.0.0", sdkVersion: "pimote-lp@1" },
+        props: props || {},
+      }),
+    }).catch(() => {});
+  } catch { /* 計測失敗は無視 */ }
+};
 const langQ = new URLSearchParams(location.search).get("lang"); // en入口(en/)からの流入は英語を強制
 if (langQ === "en") setLang(true);
 else if (langQ === "ja") setLang(false);
 else if (!/^ja/.test(navigator.language || "ja")) setLang(true);
 { const hv = document.getElementById("hero-video"); if (hv && HERO_RM) { hv.removeAttribute("autoplay"); hv.autoplay = false; hv.pause(); hv.load(); } }
+{
+  let ref = "direct";
+  try { if (document.referrer) ref = new URL(document.referrer).hostname; } catch { /* noop */ }
+  apta("page_view", { lang: document.documentElement.classList.contains("en") ? "en" : "ja", entry: langQ === "en" ? "en-link" : "direct", ref });
+}
+document.querySelectorAll(".dlbtn").forEach((b) => {
+  b.addEventListener("click", () => apta("dl_click", { spot: b.id || "unknown", lang: document.documentElement.classList.contains("en") ? "en" : "ja" }));
+});
 
 // ===== DLボタン（URL未設定の間は公開予告） =====
 function applyDl(){
