@@ -16,7 +16,11 @@
 <style>body{background:#050507;color:#f2f3f5;font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;}</style>
 </head>
 <body>
-<p><a href="../?lang=en" style="color:#a2883b;">Open Pimote →</a></p>
-<script>location.replace("../?lang=en");</script>
+<p><a id="fallback" href="../?lang=en" style="color:#a2883b;">Open Pimote →</a></p>
+<script>
+// UTM等のパラメータを保持したまま本体LPへ（lang=enを合流）
+const q = new URLSearchParams(location.search); q.set("lang", "en");
+location.replace("../?" + q.toString());
+</script>
 </body>
 </html>

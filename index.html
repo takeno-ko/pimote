@@ -457,7 +457,7 @@
       <a href="https://earthy-mirror-141.notion.site/Pimote-Privacy-Policy-39ce74c26f9581c09c8cff271b5679bf" target="_blank" rel="noopener"><span class="ja-t">プライバシーポリシー</span><span class="en-t">Privacy</span></a>
       <a href="mailto:pimote.support@gmail.com"><span class="ja-t">お問い合わせ</span><span class="en-t">Contact</span></a>
     </div>
-    <div class="cr">© 2026 takenoko — Pimote <span id="v-check" style="opacity:.4;">rev.130</span></div>
+    <div class="cr">© 2026 takenoko — Pimote <span id="v-check" style="opacity:.4;">rev.131</span></div>
   </footer>
 </div>
 
@@ -544,7 +544,7 @@ else if (!/^ja/.test(navigator.language || "ja")) setLang(true);
 {
   let ref = "direct";
   try { if (document.referrer) ref = new URL(document.referrer).hostname; } catch { /* noop */ }
-  apta("page_view", { lang: document.documentElement.classList.contains("en") ? "en" : "ja", entry: langQ === "en" ? "en-link" : "direct", ref });
+  apta("page_view", { lang: document.documentElement.classList.contains("en") ? "en" : "ja", entry: langQ === "en" ? "en-link" : "direct", ref, utm: new URLSearchParams(location.search).get("utm_source") || "none" });
 }
 document.querySelectorAll(".dlbtn").forEach((b) => {
   b.addEventListener("click", () => apta("dl_click", { spot: b.id || "unknown", lang: document.documentElement.classList.contains("en") ? "en" : "ja" }));
