@@ -457,7 +457,7 @@
       <a href="https://earthy-mirror-141.notion.site/Pimote-Privacy-Policy-39ce74c26f9581c09c8cff271b5679bf" target="_blank" rel="noopener"><span class="ja-t">プライバシーポリシー</span><span class="en-t">Privacy</span></a>
       <a href="mailto:pimote.support@gmail.com"><span class="ja-t">お問い合わせ</span><span class="en-t">Contact</span></a>
     </div>
-    <div class="cr">© 2026 takenoko — Pimote <span id="v-check" style="opacity:.4;">rev.131</span></div>
+    <div class="cr">© 2026 takenoko — Pimote <span id="v-check" style="opacity:.4;">rev.132</span></div>
   </footer>
 </div>
 
@@ -920,7 +920,7 @@ applyDl();
       const urls = (arr || []).map(f => f && f.url).filter(Boolean);
       if (urls.length) { S[k] = urls; F[k] = (j.fps && j.fps[k]) || 12; }
     }
-    const out = { S, F };
+    const out = { S, F, sync: j.scrollSync === true }; // スクロール速度連動（v2.520・作品ごと）
     artCache.set(dataPath, out);
     return out;
   };
@@ -1052,7 +1052,7 @@ applyDl();
   const fetchArt = (p) => window.__fetchArt(p); // 定義は先頭のブロック（フィードと共用キャッシュ）
   const REACT_ORDER = ["idle","cursor","click","pat","drag","typing","scroll","walk","sleep","notify","charging","batteryLow"]; // 反応ピルの固定順（アプリv2.512と同じ）
   // 触れるミニデモ（ヒーローと同じ意味論：カーソル8方向/クリック/なで/スクロール/タイピング/ドラッグ/散歩/眠り）
-  function spawnDemo(stage, S, F, onState){
+  function spawnDemo(stage, S, F, onState, scrollSync){
     const img = document.createElement("img");
     img.className = "wm-pet";
     stage.appendChild(img);
@@ -1110,12 +1110,13 @@ applyDl();
       if (onState) onState(key.replace(/(N|NE|E|SE|S|SW|W|NW)$/, "")); // 表示中の状態を通知（ピルの金ハイライト用）
       clearInterval(timer);
       const fps = Math.max(1, Math.min(120, F[key] || 12));
+      const rate = (scrollSync && key === "scroll") ? Math.max(0.5, Math.min(3, scrRate)) : 1; // 速度連動（v2.520）
       img.src = S[key][0];
       timer = setInterval(() => {
         idx++;
         if (once && idx >= S[cur].length) { once = false; play("idle"); return; }
         idx %= S[cur].length; img.src = S[cur][idx];
-      }, 1000/fps);
+      }, 1000/(fps*rate));
     };
     // ピクセル hit-test（実機と同じ＝不透明の上だけ反応）
     const pxc = new Map();
@@ -1183,11 +1184,18 @@ applyDl();
       if (!patOn) play(S[key] ? key : "cursor");
       clearTimeout(hoverT); hoverT = setTimeout(() => { if (!once && !walking && !grab && !scrollHold && !patOn) play("idle"); }, 600);
     });
+    let scrRate = 1, scrLastAt = 0; // スクロール速度連動（v2.520）＝間隔120msで等倍・0.5〜3×・35%スムージング（アプリと同一規則）
     stage.addEventListener("wheel", (e) => { if (!S.scroll) return; e.preventDefault(); wake();
       if (walking) { walking = false; cancelAnimationFrame(walkRaf); schedWalk(); }
       scrollHold = true;
+      if (scrollSync) {
+        const now = performance.now();
+        if (scrLastAt > 0) { const gap = Math.max(16, now - scrLastAt); const target = Math.max(0.5, Math.min(3, 120/gap)); scrRate += (target - scrRate) * 0.35; }
+        scrLastAt = now;
+        if (!once && !grab && cur === "scroll") { cur = ""; } // 新しい倍率で張り直す（playの同一キーガードを外す）
+      }
       if (!once && !grab) play("scroll");
-      clearTimeout(wheelT); wheelT = setTimeout(() => { scrollHold = false; if (!once && !grab && cur === "scroll") play("idle"); }, 450); }, { passive: false });
+      clearTimeout(wheelT); wheelT = setTimeout(() => { scrollHold = false; scrRate = 1; scrLastAt = 0; if (!once && !grab && cur === "scroll") play("idle"); }, 450); }, { passive: false });
     const keyH = (e) => { const t = e.target; if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return; if (!S.typing || grab) return; wake();
       if (walking) { walking = false; cancelAnimationFrame(walkRaf); schedWalk(); }
       if (!once) play("typing");
@@ -1247,13 +1255,13 @@ applyDl();
     bg.querySelector(".wm-cta").addEventListener("click", close);
     let cycleT = 0; // カーソル追従ピル＝全方向巡回タイマー
     try {
-      const { S, F } = await fetchArt(w.data_path);
+      const { S, F, sync } = await fetchArt(w.data_path);
       // ピル＝実際に読み込んだ作品の状態から組み立て直す（サーバー保存のreactsは旧データでズレていることがある・アプリv2.517と同じ）
       const rbox = bg.querySelector(".wm-reacts");
       const stageEl = bg.querySelector(".wm-stage");
       const ctl = spawnDemo(stageEl, S, F, (b) => {
         rbox?.querySelectorAll(".pill").forEach(pl => pl.classList.toggle("on", pl.dataset.key === b)); // 表示中＝金
-      });
+      }, sync);
       closeCur = ctl;
       if (rbox && S) {
         const enN = document.documentElement.classList.contains("en");
